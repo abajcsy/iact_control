@@ -1,4 +1,4 @@
-# iact_control
+# iact_control: InterACTive Control
 
 Implementation of traditional and interactive control schemes for a Kinova 7DOF Jaco robotic arm. 
 ROS, Python, and Kinova API.
