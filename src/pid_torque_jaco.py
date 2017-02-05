@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 """
-This node demonstrates velocity-based PID control by moving the Jaco
+This node demonstrates torque-based PID control by moving the Jaco
 so that it maintains a fixed distance to a target. 
 
 Author: Andrea Bajcsy (abajcsy@eecs.berkeley.edu)
@@ -31,12 +31,12 @@ import matplotlib.pyplot as plt
 
 prefix = 'j2s7s300_driver'
 
-class PIDVelocityJaco(object): 
+class PIDTorqueJaco(object): 
 	"""
 	This class represents a node that moves the Jaco with PID control.
-	The joint velocities are computed as:
+	The joint torques are computed as:
 		
-		V = -K_p(e) - K_d(e_dot) - K_i*Integral(e)
+		T = -K_p(e) - K_d(e_dot) - K_i*Integral(e)
 
 	where:
 
@@ -50,7 +50,7 @@ class PIDVelocityJaco(object):
 		/j2s7s300_driver/out/joint_angles	- Jaco joint angles
 	
 	Publishes to:
-		/j2s7s300_driver/in/joint_velocity	- Jaco joint velocities 
+		/j2s7s300_driver/in/joint_torques	- Jaco joint torques
 	
 	Required parameters:
 		p_gain, i_gain, d_gain    - gain terms for the PID controller
@@ -59,13 +59,13 @@ class PIDVelocityJaco(object):
 
 	def __init__(self, p_gain, i_gain, d_gain, j0,j1,j2,j3,j4,j5,j6):
 		"""
-		Setup of the ROS node. Publishing computed velocities happens at 100Hz.
+		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
-		rospy.init_node("pid_velocity_jaco")
+		rospy.init_node("pid_torque_jaco")
 
-		# create angular-velocity publisher
-		self.velocity_pub = rospy.Publisher(prefix + '/in/joint_velocity', kinova_msgs.msg.JointVelocity, queue_size=1)
+		# create joint-torque publisher
+		self.torque_pub = rospy.Publisher(prefix + '/in/joint_torques', kinova_msgs.msg.JointTorque, queue_size=1)
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
@@ -73,8 +73,8 @@ class PIDVelocityJaco(object):
 		# convert target position from degrees (default) to radians 		
 		self.target_pos = np.array([j0,j1,j2,j3,j4,j5,j6]).reshape((7,1))* (math.pi/180.0)
 
-		self.max_velocity = 100*np.eye(7)
-		self.velocity = np.eye(7) 
+		self.max_torque = 10*np.eye(7)
+		self.torque = np.eye(7) 
 
 		print "PID Gains: " + str(p_gain) + ", " + str(i_gain) + "," + str(d_gain)
 
@@ -100,24 +100,24 @@ class PIDVelocityJaco(object):
 		r = rospy.Rate(100) 
 		while not rospy.is_shutdown(): #and nb != 'q':
 			#nb = getch.getche() # need to import 
-			self.velocity_pub.publish(self.velocity_to_JointVelocityMsg()) 
+			self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
 			r.sleep()
 
 		# plot the error over time after finished
 		self.plotter.plot_PID()
 
-	def velocity_to_JointVelocityMsg(self):
+	def velocity_to_JointTorqueMsg(self):
 		"""
-		Returns a JointVelocity Kinova msg from an array of velocities
+		Returns a JointTorque Kinova msg from an array of torques
 		"""
-		jointCmd = kinova_msgs.msg.JointVelocity()
-		jointCmd.joint1 = self.velocity[0][0];
-		jointCmd.joint2 = self.velocity[1][1];
-		jointCmd.joint3 = self.velocity[2][2];
-		jointCmd.joint4 = self.velocity[3][3];
-		jointCmd.joint5 = self.velocity[4][4];
-		jointCmd.joint6 = self.velocity[5][5];
-		jointCmd.joint7 = self.velocity[6][6];
+		jointCmd = kinova_msgs.msg.JointTorque()
+		jointCmd.joint1 = self.torque[0][0];
+		jointCmd.joint2 = self.torque[1][1];
+		jointCmd.joint3 = self.torque[2][2];
+		jointCmd.joint4 = self.torque[3][3];
+		jointCmd.joint5 = self.torque[4][4];
+		jointCmd.joint6 = self.torque[5][5];
+		jointCmd.joint7 = self.torque[6][6];
 
 		return jointCmd
 
@@ -133,7 +133,7 @@ class PIDVelocityJaco(object):
 	def joint_angles_callback(self, msg):
 		"""
 		Reads the latest position of the robot and publishes an
-		appropriate velocity command to move the robot to the target
+		appropriate torque command to move the robot to the target
 		"""
 		# read the current joint angles from the robot
 		pos_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
@@ -141,15 +141,15 @@ class PIDVelocityJaco(object):
 		# convert to radians
 		pos_curr = pos_curr*(math.pi/180.0)
 
-		# update velocity from PID based on current position
-		self.velocity = self.PID_control(pos_curr)
+		# update torque from PID based on current position
+		self.torque = self.PID_control(pos_curr)
 
-		# check if each angular velocity is within set velocity limits
+		# check if each angular torque is within set velocity limits
 		for i in range(7):
-			if self.velocity[i][i] > self.max_velocity[i][i]:
-				self.velocity[i][i] = self.max_velocity[i][i]
-			if self.velocity[i][i] < -self.max_velocity[i][i]:
-				self.velocity[i][i] = -self.max_velocity[i][i]
+			if self.torque[i][i] > self.max_torque[i][i]:
+				self.torque[i][i] = self.max_torque[i][i]
+			if self.torque[i][i] < -self.max_torque[i][i]:
+				self.torque[i][i] = -self.max_torque[i][i]
 
 		# update plotter with new error measurement 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error)
