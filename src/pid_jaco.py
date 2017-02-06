@@ -91,16 +91,20 @@ class PIDVelocityJaco(object):
 
 		self.controller = pid.PID(P,I,D,0,0)
 
+		self.joint_torques = np.zeros((7,1))
+
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
 		
+		print "----------------------------------"
+		print "Moving robot, press ENTER to quit:"
 		while not rospy.is_shutdown(): 
-			print 'Moving robot, press ENTER to quit:'
 
-			os.system('cls' if os.name == 'nt' else 'clear')
+			#os.system('cls' if os.name == 'nt' else 'clear')
+			
 			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
 				line = raw_input()
 				break
@@ -166,6 +170,9 @@ class PIDVelocityJaco(object):
 		"""
 		# read the current joint torques from the robot
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+
+		# save running list of joint torques
+		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
 
 		# update the plot of joint torques over time
 		self.plotter.update_joint_torque(torque_curr)
