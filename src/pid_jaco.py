@@ -57,7 +57,7 @@ class PIDVelocityJaco(object):
 		j0, ... , j6				  - goal configuration for joints 1-7 (in degrees)
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, j0,j1,j2,j3,j4,j5,j6):
+	def __init__(self, p_gain, i_gain, d_gain, j0,j1,j2,j3,j4,j5,j6,iact_flag):
 		"""
 		Setup of the ROS node. Publishing computed velocities happens at 100Hz.
 		"""
@@ -178,8 +178,8 @@ class PIDVelocityJaco(object):
 		self.plotter.update_joint_torque(torque_curr)
 
 if __name__ == '__main__':
-	if len(sys.argv) < 11:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, joint angles 1 - 7."
+	if len(sys.argv) < 12:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, joint angles 1 - 7, interactive flag (0 or 1)."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
@@ -193,6 +193,10 @@ if __name__ == '__main__':
 		j5 = float(sys.argv[9])
 		j6 = float(sys.argv[10])
 
-		PIDVelocityJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
+		# 0 = traditional PID
+		# 1 = interactive PID
+		iact_flag = int(sys.argv[11])
+
+		PIDVelocityJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6,iact_flag)
 		
 	

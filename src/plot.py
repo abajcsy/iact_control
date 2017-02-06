@@ -90,16 +90,17 @@ class Plotter(object):
 		ax = plt.subplot(4, 1, 4)
 		for i in range(num_joints):	
 			l = "j"+str(i)
-			t = self.joint_times[0]			
-			avg = np.average(self.joint_torques[i])
-			stdev_high = [avg + np.std(self.joint_torques[i])]*len(self.joint_times[0])
-			stdev_low = [avg - np.std(self.joint_torques[i])]*len(self.joint_times[0])
+			t = self.joint_times[0]
+			torques = self.joint_torques[i]			
+			avg = np.average(torques)
+			stdev_high = [avg + np.std(torques)]*len(t)
+			stdev_low = [avg - np.std(torques)]*len(t)
 
 			# plot the joint torque over time 
-			base_line,  = plt.plot(t, self.joint_torques[i], '-', linewidth=3.0, label=l)
+			base_line,  = plt.plot(t, torques, '-', linewidth=3.0, label=l)
 
-			# plot average of each joint torque
-			plt.plot(t, [avg]*len(self.joint_times[0]), '--', linewidth=1.0, color=base_line.get_color())
+			# plot average of each joint torque over time
+			plt.plot(t, [avg]*len(t), '--', linewidth=1.0, color=base_line.get_color())
 
 			# plot +/- 1 standard deviation around mean
 			ax.fill_between(t, stdev_low, stdev_high, facecolor=base_line.get_color(), alpha=0.2)
