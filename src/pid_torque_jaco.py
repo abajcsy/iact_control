@@ -64,8 +64,11 @@ class PIDTorqueJaco(object):
 
 		rospy.init_node("pid_torque_jaco")
 
+		# switch robot to torque-control mode
+		self.init_torque_mode()
+
 		# create joint-torque publisher
-		self.torque_pub = rospy.Publisher(prefix + '/in/joint_torques', kinova_msgs.msg.JointTorque, queue_size=1)
+		self.torque_pub = rospy.Publisher(prefix + '/in/joint_torque', kinova_msgs.msg.JointTorque, queue_size=1)
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
@@ -106,7 +109,31 @@ class PIDTorqueJaco(object):
 		# plot the error over time after finished
 		self.plotter.plot_PID()
 
-	def velocity_to_JointTorqueMsg(self):
+	def init_torque_mode(self):
+		"""
+		Switches Jaco to torque-control mode using ROS services
+		"""
+		# use service to set torque control parameters	
+		service_address = prefix + '/in/set_torque_control_parameters'	
+		rospy.wait_for_service(service_address)
+		try:
+			setTorqueParameters = rospy.ServiceProxy(service_address, SetTorqueControlParameters)
+			setTorqueParameters()           
+		except rospy.ServiceException, e:
+			print "Service call failed: %s"%e
+			return None	
+
+		# use service to switch to torque control	
+		service_address = prefix + '/in/set_torque_control_mode'	
+		rospy.wait_for_service(service_address)
+		try:
+			switchTorquemode = rospy.ServiceProxy(service_address, SetTorqueControlMode)
+			switchTorquemode(1)           
+		except rospy.ServiceException, e:
+			print "Service call failed: %s"%e
+			return None	
+
+	def torque_to_JointTorqueMsg(self):
 		"""
 		Returns a JointTorque Kinova msg from an array of torques
 		"""
@@ -151,6 +178,8 @@ class PIDTorqueJaco(object):
 			if self.torque[i][i] < -self.max_torque[i][i]:
 				self.torque[i][i] = -self.max_torque[i][i]
 
+		self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
+
 		# update plotter with new error measurement 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error)
 
@@ -171,6 +200,6 @@ if __name__ == '__main__':
 		j5 = float(sys.argv[9])
 		j6 = float(sys.argv[10])
 
-		PIDJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
+		PIDTorqueJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
 		
 	

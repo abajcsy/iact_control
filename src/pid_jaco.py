@@ -12,7 +12,7 @@ import rospy
 import math
 import pid
 import tf
-import sys
+import sys, select, os
 import thread
 import argparse
 import actionlib
@@ -69,6 +69,8 @@ class PIDVelocityJaco(object):
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
+		# create subscriber to joint_torques
+		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
 
 		# convert target position from degrees (default) to radians 		
 		self.target_pos = np.array([j0,j1,j2,j3,j4,j5,j6]).reshape((7,1))* (math.pi/180.0)
@@ -92,14 +94,17 @@ class PIDVelocityJaco(object):
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 
-		#print "-----------------------------"
-		#print 'Moving robot, press q to quit:'
-		#nb = ''
-
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
-		while not rospy.is_shutdown(): #and nb != 'q':
-			#nb = getch.getche() # need to import 
+		
+		while not rospy.is_shutdown(): 
+			print 'Moving robot, press ENTER to quit:'
+
+			os.system('cls' if os.name == 'nt' else 'clear')
+			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+				line = raw_input()
+				break
+
 			self.velocity_pub.publish(self.velocity_to_JointVelocityMsg()) 
 			r.sleep()
 
@@ -154,6 +159,16 @@ class PIDVelocityJaco(object):
 		# update plotter with new error measurement 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error)
 
+	def joint_torques_callback(self, msg):
+		"""
+		Reads the latest torque sensed by the robot and records it for 
+		plotting & analysis
+		"""
+		# read the current joint torques from the robot
+		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+
+		# update the plot of joint torques over time
+		self.plotter.update_joint_torque(torque_curr)
 
 if __name__ == '__main__':
 	if len(sys.argv) < 11:
@@ -171,6 +186,6 @@ if __name__ == '__main__':
 		j5 = float(sys.argv[9])
 		j6 = float(sys.argv[10])
 
-		PIDJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
+		PIDVelocityJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
 		
 	

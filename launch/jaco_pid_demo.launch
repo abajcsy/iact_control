@@ -1,6 +1,6 @@
 <launch>
 
-	<arg name="p_gain" default="10"/>
+	<arg name="p_gain" default="100"/>
 	<arg name="i_gain" default="0"/>
 	<arg name="d_gain" default="0"/>
 
