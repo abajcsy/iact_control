@@ -190,16 +190,12 @@ class PIDVelocityJaco(object):
 			avg = np.average(self.joint_torques[i])
 			stdev = np.std(self.joint_torques[i])
 
-			# if torques are above threshold, then update the velocity
-			#if torque_curr[i] > avg+1.5*stdev or torque_curr[i] < avg-1.5*stdev:
-			#if torque_curr[i] > 10 or torque_curr[i] < -10:
-
-			# if position hasn't deviated more than threshold
+			# if position hasn't deviated more than threshold and torques are 
+			# above threshold, then update the velocity
 			deviation = np.abs(self.controller.p_error[i][0])
 			if deviation < 0.5 and np.abs(torque_curr[i]) > 10:
-				print "Deviation for j" + str(i) + ": " + str(deviation)
-				print "UPDATING VELOCITY for j" + str(i)
-				print "Tau min: 10, Tau_curr:" + str(torque_curr[i]) + ", Tau_max: 10"
+				print "Updating velocity: Position dev for j" + str(i) + ": " + str(deviation)
+				print "Tau_curr: " + str(torque_curr[i])
 				self.vel_iact[i][i] += -torque_curr[i]
 			else: # deviated too far, reject interaction torques
 				self.vel_iact[i][i] = 0
