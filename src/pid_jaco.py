@@ -75,6 +75,9 @@ class PIDVelocityJaco(object):
 		# convert target position from degrees (default) to radians 		
 		self.target_pos = np.array([j0,j1,j2,j3,j4,j5,j6]).reshape((7,1))* (math.pi/180.0)
 
+		# holds approximate current position
+		self.curr_pos = np.zeros((7,1))
+
 		self.max_velocity = 100*np.eye(7)
 		self.velocity = np.eye(7) 
 
@@ -154,6 +157,9 @@ class PIDVelocityJaco(object):
 		# convert to radians
 		pos_curr = pos_curr*(math.pi/180.0)
 
+		# store current (approximate) position for later computations
+		self.curr_pos = pos_curr
+
 		# update velocity from PID based on current position
 		self.velocity = self.PID_control(pos_curr)
 		
@@ -183,12 +189,20 @@ class PIDVelocityJaco(object):
 		for i in range(7):
 			avg = np.average(self.joint_torques[i])
 			stdev = np.std(self.joint_torques[i])
+
 			# if torques are above threshold, then update the velocity
 			#if torque_curr[i] > avg+1.5*stdev or torque_curr[i] < avg-1.5*stdev:
-			if torque_curr[i] > 10 or torque_curr[i] < -10:
+			#if torque_curr[i] > 10 or torque_curr[i] < -10:
+
+			# if position hasn't deviated more than threshold
+			deviation = np.abs(self.controller.p_error[i][0])
+			if deviation < 0.5 and np.abs(torque_curr[i]) > 10:
+				print "Deviation for j" + str(i) + ": " + str(deviation)
 				print "UPDATING VELOCITY for j" + str(i)
-				print "tau min: 10, tau_curr:" + str(torque_curr[i]) + ", tau_max: 10"
+				print "Tau min: 10, Tau_curr:" + str(torque_curr[i]) + ", Tau_max: 10"
 				self.vel_iact[i][i] += -torque_curr[i]
+			else: # deviated too far, reject interaction torques
+				self.vel_iact[i][i] = 0
 
 		# save running list of joint torques
 		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
