@@ -93,6 +93,10 @@ class PIDVelocityJaco(object):
 
 		self.joint_torques = np.zeros((7,1))
 
+		# padding to velocity command based on interaction
+		self.vel_iact = np.zeros((7,7))
+		self.iact_flag = iact_flag
+
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 
@@ -152,6 +156,10 @@ class PIDVelocityJaco(object):
 
 		# update velocity from PID based on current position
 		self.velocity = self.PID_control(pos_curr)
+		
+		# TODO: pad velocity with interactive control
+		if iact_flag:
+			self.velocity += self.vel_iact
 
 		# check if each angular velocity is within set velocity limits
 		for i in range(7):
@@ -161,7 +169,8 @@ class PIDVelocityJaco(object):
 				self.velocity[i][i] = -self.max_velocity[i][i]
 
 		# update plotter with new error measurement 
-		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error)
+		cmd_vel = np.diag(self.controller.cmd).reshape((7,1))
+		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_vel)
 
 	def joint_torques_callback(self, msg):
 		"""
@@ -170,6 +179,16 @@ class PIDVelocityJaco(object):
 		"""
 		# read the current joint torques from the robot
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+
+		for i in range(7):
+			avg = np.average(self.joint_torques[i])
+			stdev = np.std(self.joint_torques[i])
+			# if torques are above threshold, then update the velocity
+			#if torque_curr[i] > avg+1.5*stdev or torque_curr[i] < avg-1.5*stdev:
+			if torque_curr[i] > 10 or torque_curr[i] < -10:
+				print "UPDATING VELOCITY for j" + str(i)
+				print "tau min: 10, tau_curr:" + str(torque_curr[i]) + ", tau_max: 10"
+				self.vel_iact[i][i] += -torque_curr[i]
 
 		# save running list of joint torques
 		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))

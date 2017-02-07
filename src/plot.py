@@ -28,10 +28,13 @@ class Plotter(object):
 		self.i_error = np.zeros((7,1))
 		self.d_error = np.zeros((7,1))
 
+		self.vel = np.zeros((7,1))
+
 		self.joint_torques = np.zeros((7,1))
 		self.joint_times = np.zeros(1)
 		self.jt = 0
 
+		
 
 	def update_joint_torque(self, j_torque):
 		"""
@@ -41,13 +44,14 @@ class Plotter(object):
 		self.joint_times = np.column_stack((self.joint_times,np.array(self.jt)))
 		self.jt += self.dt
 
-	def update_PID_plot(self, p_e, i_e, d_e):
+	def update_PID_plot(self, p_e, i_e, d_e, vel):
 		"""
 		Updates the P,I,D errors based on most recent movement.
 		"""
 		self.p_error = np.column_stack((self.p_error,p_e))
 		self.i_error = np.column_stack((self.i_error,i_e))
 		self.d_error = np.column_stack((self.d_error,d_e))
+		self.vel = np.column_stack((self.vel,vel))
 		self.times = np.column_stack((self.times,np.array(self.t)))
 		self.t += self.dt
 
@@ -56,38 +60,38 @@ class Plotter(object):
 		Plots the P,I,D errors over time.
 		"""
 		# plot p_error
-		plt.subplot(4, 1, 1)
+		plt.subplot(5, 1, 1)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.p_error[i], '-', linewidth=3.0, label=l)
-		plt.xlabel("time (s)")
+		#plt.xlabel("time (s)")
 		plt.ylabel("p error (rad)")
 		plt.title("P,I,D error with K_p: " + str(self.p_gain) + ", K_i:" + str(self.i_gain) + ", K_d:" + str(self.d_gain))
-		plt.legend()
+		plt.legend(prop={'size':10})
 		plt.grid()
 
 		# plot i_error
-		plt.subplot(4, 1, 2)
+		plt.subplot(5, 1, 2)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.i_error[i], '-', linewidth=3.0, label=l)
-		plt.xlabel("time (s)")
+		#plt.xlabel("time (s)")
 		plt.ylabel("i error")
-		plt.legend()
+		plt.legend(prop={'size':10})
 		plt.grid()
 
 		# plot d_error
-		plt.subplot(4, 1, 3)
+		plt.subplot(5, 1, 3)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.d_error[i], '-', linewidth=3.0, label=l)
-		plt.xlabel("time (s)")
+		#plt.xlabel("time (s)")
 		plt.ylabel("d error")
-		plt.legend()
+		plt.legend(prop={'size':10})
 		plt.grid()
 
 		# plot joint_torques
-		ax = plt.subplot(4, 1, 4)
+		ax = plt.subplot(5, 1, 4)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			t = self.joint_times[0]
@@ -104,9 +108,19 @@ class Plotter(object):
 
 			# plot +/- 1 standard deviation around mean
 			ax.fill_between(t, stdev_low, stdev_high, facecolor=base_line.get_color(), alpha=0.2)
+		#plt.xlabel("time (s)")
+		plt.ylabel("joint torque (Nm)")
+		plt.legend(prop={'size':10})
+		plt.grid()
+
+		# plot velocity commands over time
+		plt.subplot(5, 1, 5)
+		for i in range(num_joints):	
+			l = "j"+str(i)
+			plt.plot(self.times[0], self.vel[i], '-', linewidth=3.0, label=l)
 		plt.xlabel("time (s)")
-		plt.ylabel("joint torque")
-		plt.legend()
+		plt.ylabel("velocity (deg/s)")
+		plt.legend(prop={'size':10})
 		plt.grid()
 
 		plt.show()
