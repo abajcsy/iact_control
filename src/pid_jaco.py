@@ -110,8 +110,6 @@ class PIDVelocityJaco(object):
 		print "Moving robot, press ENTER to quit:"
 		while not rospy.is_shutdown(): 
 
-			#os.system('cls' if os.name == 'nt' else 'clear')
-			
 			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
 				line = raw_input()
 				break
@@ -163,7 +161,7 @@ class PIDVelocityJaco(object):
 		# update velocity from PID based on current position
 		self.velocity = self.PID_control(pos_curr)
 		
-		# TODO: pad velocity with interactive control
+		# TODO: if interactive mode, pad velocity with interactive control
 		if iact_flag:
 			self.velocity += self.vel_iact
 
@@ -193,7 +191,7 @@ class PIDVelocityJaco(object):
 			# if position hasn't deviated more than threshold and torques are 
 			# above threshold, then update the velocity
 			deviation = np.abs(self.controller.p_error[i][0])
-			if deviation < 0.5 and np.abs(torque_curr[i]) > 10:
+			if deviation < 1.5 and np.abs(torque_curr[i]) > 8:
 				print "Updating velocity: Position dev for j" + str(i) + ": " + str(deviation)
 				print "Tau_curr: " + str(torque_curr[i])
 				self.vel_iact[i][i] += -torque_curr[i]
