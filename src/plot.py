@@ -34,8 +34,6 @@ class Plotter(object):
 		self.joint_times = np.zeros(1)
 		self.jt = 0
 
-		
-
 	def update_joint_torque(self, j_torque):
 		"""
 		Updates joint torque measurements based on most recent movement.

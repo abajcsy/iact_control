@@ -12,7 +12,7 @@ import rospy
 import math
 import pid
 import tf
-import sys
+import sys, select, os
 import thread
 import argparse
 import actionlib
@@ -72,12 +72,17 @@ class PIDTorqueJaco(object):
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
+		# create subscriber to joint_torques
+		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
 
 		# convert target position from degrees (default) to radians 		
 		self.target_pos = np.array([j0,j1,j2,j3,j4,j5,j6]).reshape((7,1))* (math.pi/180.0)
 
-		self.max_torque = 10*np.eye(7)
+		self.max_torque = 20*np.eye(7)
+		# stores current COMMANDED joint torques
 		self.torque = np.eye(7) 
+		# stores current joint MEASURED joint torques
+		self.joint_torques = np.zeros((7,1))
 
 		print "PID Gains: " + str(p_gain) + ", " + str(i_gain) + "," + str(d_gain)
 
@@ -95,14 +100,17 @@ class PIDTorqueJaco(object):
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 
-		#print "-----------------------------"
-		#print 'Moving robot, press q to quit:'
-		#nb = ''
-
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
-		while not rospy.is_shutdown(): #and nb != 'q':
-			#nb = getch.getche() # need to import 
+
+		print "----------------------------------"
+		print "Moving robot, press ENTER to quit:"
+		while not rospy.is_shutdown():
+
+			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+				line = raw_input()
+				break
+
 			self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
 			r.sleep()
 
@@ -133,7 +141,7 @@ class PIDTorqueJaco(object):
 			print "Service call failed: %s"%e
 			return None	
 
-	def torque_to_JointTorqueMsg(self):
+	def torque_to_JointTorqueMsg(self, ):
 		"""
 		Returns a JointTorque Kinova msg from an array of torques
 		"""
@@ -157,6 +165,21 @@ class PIDTorqueJaco(object):
 		
 		return -self.controller.update_PID(error)
 
+
+	def joint_torques_callback(self, msg):
+		"""
+		Reads the latest torque sensed by the robot and records it for 
+		plotting & analysis
+		"""
+		# read the current joint torques from the robot
+		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+
+		# save running list of joint torques
+		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
+
+		# update the plot of joint torques over time
+		self.plotter.update_joint_torque(torque_curr)
+
 	def joint_angles_callback(self, msg):
 		"""
 		Reads the latest position of the robot and publishes an
@@ -178,10 +201,9 @@ class PIDTorqueJaco(object):
 			if self.torque[i][i] < -self.max_torque[i][i]:
 				self.torque[i][i] = -self.max_torque[i][i]
 
-		self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
-
-		# update plotter with new error measurement 
-		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error)
+		# update plotter with new error measurement and torque command
+		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
+		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau)
 
 
 if __name__ == '__main__':
