@@ -18,6 +18,7 @@ import argparse
 import actionlib
 import time
 import plot
+import path_planner
 
 import kinova_msgs.msg
 import geometry_msgs.msg
@@ -30,6 +31,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 prefix = 'j2s7s300_driver'
+home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
+candlestick_pos = [180.0]*7
+
+epsilon = 0.08
 
 class PIDTorqueJaco(object): 
 	"""
@@ -57,7 +62,7 @@ class PIDTorqueJaco(object):
 		j0, ... , j6				  - goal configuration for joints 1-7 (in degrees)
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, j0,j1,j2,j3,j4,j5,j6):
+	def __init__(self, p_gain, i_gain, d_gain, goal):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -75,8 +80,21 @@ class PIDTorqueJaco(object):
 		# create subscriber to joint_torques
 		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
 
-		# convert target position from degrees (default) to radians 		
-		self.target_pos = np.array([j0,j1,j2,j3,j4,j5,j6]).reshape((7,1))* (math.pi/180.0)
+		# set goal configuration
+		goal_config = candlestick_pos
+		self.target_name = "candlestick"
+		if goal == "home":		
+			goal_config = home_pos
+			self.target_name = "home"
+		elif goal == "candlestick":
+			goal_config = candlestick_pos
+
+		print "Goal config: " + str(goal_config)
+
+		# convert target position from degrees (default) to radians 
+		self.target_pos = np.array(goal_config).reshape((7,1))* (math.pi/180.0)
+		# track start position (default value is None)
+		self.start_pos = None
 
 		self.max_torque = 20*np.eye(7)
 		# stores current COMMANDED joint torques
@@ -99,23 +117,60 @@ class PIDTorqueJaco(object):
 
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
+		
+		# TODO sets max execution time
+		self.T = 20
+		self.start_T = time.time()
+
+		# TODO THIS IS A HACK
+		start = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
+		self.goal_pos = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
+		self.planner = path_planner.linear_path(start,self.goal_pos,self.T)
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
 
 		print "----------------------------------"
 		print "Moving robot, press ENTER to quit:"
+		
 		while not rospy.is_shutdown():
+			#count = 0
 
 			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
 				line = raw_input()
 				break
+
+			#for i in range(7): 
+			#	print "error at joint" + str(i) + ": " + str(np.abs(self.controller.p_error[i]))
+			#	if np.abs(self.controller.p_error[i]) < epsilon:
+			#		count += 1
+
+			#if count is 7:
+			#	if self.target_name == "candlestick":
+			#		print "SWITCHING TO CANDLESTICK GOAL"
+			#		self.target_pos = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
+			#		self.target_name = "home"
+			#	elif self.target_name == "home":
+			#		print "SWITCHING TO HOME GOAL"
+			#		self.target_pos = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
+			#		self.target_name = "candlestick"
 
 			self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
 			r.sleep()
 
 		# plot the error over time after finished
 		self.plotter.plot_PID()
+
+		# switch back to position control 
+		service_address = prefix + '/in/set_torque_control_mode'	
+		rospy.wait_for_service(service_address)
+		try:
+			switchTorquemode = rospy.ServiceProxy(service_address, SetTorqueControlMode)
+			switchTorquemode(0)
+			return None
+		except rospy.ServiceException, e:
+			print "Service call failed: %s"%e
+			#return None
 
 	def init_torque_mode(self):
 		"""
@@ -129,7 +184,7 @@ class PIDTorqueJaco(object):
 			setTorqueParameters()           
 		except rospy.ServiceException, e:
 			print "Service call failed: %s"%e
-			return None	
+			#return None	
 
 		# use service to switch to torque control	
 		service_address = prefix + '/in/set_torque_control_mode'	
@@ -165,7 +220,6 @@ class PIDTorqueJaco(object):
 		
 		return -self.controller.update_PID(error)
 
-
 	def joint_torques_callback(self, msg):
 		"""
 		Reads the latest torque sensed by the robot and records it for 
@@ -186,13 +240,26 @@ class PIDTorqueJaco(object):
 		appropriate torque command to move the robot to the target
 		"""
 		# read the current joint angles from the robot
-		pos_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+		curr_pos = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
 		# convert to radians
-		pos_curr = pos_curr*(math.pi/180.0)
+		curr_pos = curr_pos*(math.pi/180.0)
+
+		# set starting position 
+		if(self.start_pos is None):
+			self.start_pos = curr_pos
 
 		# update torque from PID based on current position
-		self.torque = self.PID_control(pos_curr)
+		self.torque = self.PID_control(curr_pos)
+
+		# TODO THIS IS EXPERIMENTAL
+		t = time.time() - self.start_T
+		for i in range(7):
+			self.target_pos[i][0] = self.planner[i](t)
+		print "t:" + str(t)
+		print "curr_pos = " + str(curr_pos)
+		print "target_pos = " + str(self.target_pos)
+		print "goal_pos = " + str(self.goal_pos)
 
 		# check if each angular torque is within set velocity limits
 		for i in range(7):
@@ -207,21 +274,15 @@ class PIDTorqueJaco(object):
 
 
 if __name__ == '__main__':
-	if len(sys.argv) < 11:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, joint angles 1 - 7."
+	if len(sys.argv) < 5:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, goal."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
 
-		j0 = float(sys.argv[4])
-		j1 = float(sys.argv[5])
-		j2 = float(sys.argv[6])
-		j3 = float(sys.argv[7])
-		j4 = float(sys.argv[8])
-		j5 = float(sys.argv[9])
-		j6 = float(sys.argv[10])
+		goal = str(sys.argv[4])
 
-		PIDTorqueJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
-		
+		#PIDTorqueJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
+		PIDTorqueJaco(p_gains,i_gains,d_gains,goal)
 	
