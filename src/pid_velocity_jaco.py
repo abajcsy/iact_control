@@ -137,7 +137,7 @@ class PIDVelocityJaco(object):
 
 	def PID_control(self, pos):
 		"""
-		Return a control torque based on PID control
+		Return a control velocity based on PID control
 		"""
 		# deal with angle wraparound when computing difference
 		error = -((self.target_pos - pos + math.pi)%(2*math.pi) - math.pi)

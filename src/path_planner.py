@@ -8,7 +8,7 @@ import time
 
 def linear_path(start,goal,T):
 	"""
-	Returns linear (in C-space) time-parametrized labda function for each joint
+	Returns linear (in C-space) time-parametrized lambda function for each joint
 	"""
 	t = symbols('t')
 	theta = (goal-start)*(1/T)*t + start
