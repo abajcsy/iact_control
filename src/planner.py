@@ -7,6 +7,15 @@ import matplotlib.pyplot as plt
 import time
 
 class PathPlanner(object):
+	"""
+	This class represents simple continous, time-parametrize path planning 
+	class.
+
+	Required parameters:
+		start    - start cofiguration (at t = 0)
+		goal	 - goal configuration (at t = T)
+		T 		 - total time for trajectory execution
+	"""
 
 	def __init__(self, start, goal, T):
 		self.s = start
@@ -22,7 +31,17 @@ class PathPlanner(object):
 		theta = (self.g-self.s)*(1/self.T)*t + self.s
 		print "theta:" + str(theta)
 
+		# if after the timestep, then just go to goal
+		if t > self.T:
+			theta = self.g
+
 		return theta
+
+	def update_T(self, newT):
+		"""
+		Updates T to rescale linear path.
+		"""
+		self.T = newT
 
 if __name__ == '__main__':
 	T = 20.0
@@ -31,21 +50,4 @@ if __name__ == '__main__':
 
 	planner = PathPlanner(s,g,T)
 	print planner.linear_path(10.4)
-
-	"""
-	for i in range(7):
-		l = "j"+str(i)
-
-		x_vals = np.linspace(0,20,500)
-		y_vals = planner.linear_path(x_vals)
-
-		plt.plot(x_vals, y_vals, label=l)
-
-	plt.plot(x_vals, y_vals, label=l)
-
-	plt.xlabel('time (s)')
-	plt.ylabel('theta')
-	plt.legend()
-	plt.show()
-	"""
 

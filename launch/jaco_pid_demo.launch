@@ -2,9 +2,10 @@
 
 	<arg name="p_gain" default="10"/>
 	<arg name="i_gain" default="0"/>
-	<arg name="d_gain" default="2"/>
+	<arg name="d_gain" default="0"/>
 
 	<arg name="iact_flag" default="0"/>
+	<arg name="start" default="candlestick"/>
 	<arg name="goal" default="home"/>
 
 	<!-- HOME POSITION:  -->
@@ -29,6 +30,6 @@
 	<node name="pid_velocity_jaco" pkg="iact_control" type="pid_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg j0) $(arg j1) $(arg j2) $(arg j3) $(arg j4) $(arg j5) $(arg j6) $(arg iact_flag)" output="screen"/> -->
 	
 	<!-- TORQUE PID -->
-	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg goal)" output="screen"/> 
+	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg start) $(arg goal)" output="screen"/> 
 	
 </launch>

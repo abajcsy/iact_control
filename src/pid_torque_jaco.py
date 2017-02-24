@@ -18,7 +18,7 @@ import argparse
 import actionlib
 import time
 import plot
-import path_planner
+import planner
 
 import kinova_msgs.msg
 import geometry_msgs.msg
@@ -34,7 +34,7 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-epsilon = 0.08
+epsilon = 0.05
 
 class PIDTorqueJaco(object): 
 	"""
@@ -62,7 +62,7 @@ class PIDTorqueJaco(object):
 		j0, ... , j6				  - goal configuration for joints 1-7 (in degrees)
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, goal):
+	def __init__(self, p_gain, i_gain, d_gain, start, goal):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -89,12 +89,24 @@ class PIDTorqueJaco(object):
 		elif goal == "candlestick":
 			goal_config = candlestick_pos
 
+		start_config = home_pos
+		if start == "home":		
+			start_config = home_pos
+		elif start == "candlestick":
+			start_config = candlestick_pos
+
+		print "Start config: " + str(start_config)
 		print "Goal config: " + str(goal_config)
 
-		# convert target position from degrees (default) to radians 
-		self.target_pos = np.array(goal_config).reshape((7,1))* (math.pi/180.0)
-		# track start position (default value is None)
-		self.start_pos = None
+		# save intermediate target position from degrees (default) to radians 
+		self.target_pos = np.array(start_config).reshape((7,1))* (math.pi/180.0)
+		# save start configuratoin of arm
+		self.start_pos = np.array(start_config).reshape((7,1))* (math.pi/180.0)
+		# save final goal configuration
+		self.goal_pos = np.array(goal_config).reshape((7,1))* (math.pi/180.0)
+	
+		# track if you have gotten to start of path
+		self.reached_start = False
 
 		self.max_torque = 20*np.eye(7)
 		# stores current COMMANDED joint torques
@@ -119,15 +131,11 @@ class PIDTorqueJaco(object):
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 		
 		# TODO sets max execution time
-		self.T = 10.0
+		self.T = 1.0
 		self.start_T = time.time()
 
-		# TODO THIS IS A HACK
-		start = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
-		self.goal_pos = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
-
 		# gets path planner
-		self.planner = path_planner.PathPlanner(start,self.goal_pos,self.T)
+		self.planner = planner.PathPlanner(self.start_pos,self.goal_pos,self.T)
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
@@ -232,20 +240,39 @@ class PIDTorqueJaco(object):
 		# convert to radians
 		curr_pos = curr_pos*(math.pi/180.0)
 
-		# set starting position 
-		if(self.start_pos is None):
-			self.start_pos = curr_pos
+		# check if the arm is at the start of the path to execute
+		if not self.reached_start:
+			pos_diff_from_start = np.fabs(curr_pos - self.start_pos)
+			print "POS_DIFF_FROM_START: "+str(pos_diff_from_start)
+			is_at_start = True
+			for i in range(7):
+				# if too far from the starting pos of trajectory
+				if pos_diff_from_start[i] > epsilon:
+					is_at_start = False
+					break
+
+			if is_at_start:
+				print "REACHED START"
+				self.reached_start = True
+				self.start_T = time.time()
+			else:
+				print "NOT AT START"
+				# set starting position as goal
+				self.target_pos = self.start_pos
+		else:
+			print "REACHED START & EXECUTING PATH"
+			# TODO THIS IS EXPERIMENTAL
+			t = time.time() - self.start_T
+			print "t:" + str(t)
+			self.target_pos = self.planner.linear_path(t)
+		
 
 		# update torque from PID based on current position
 		self.torque = self.PID_control(curr_pos)
 
-		# TODO THIS IS EXPERIMENTAL
-		t = time.time() - self.start_T
-		self.target_pos = self.planner.linear_path(t)
-
-		print "t:" + str(t)
 		print "curr_pos = " + str(curr_pos)
 		print "target_pos = " + str(self.target_pos)
+		print "start_pos = " + str(self.start_pos)
 		print "goal_pos = " + str(self.goal_pos)
 
 		# check if each angular torque is within set velocity limits
@@ -261,15 +288,16 @@ class PIDTorqueJaco(object):
 
 
 if __name__ == '__main__':
-	if len(sys.argv) < 5:
+	if len(sys.argv) < 6:
 		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, goal."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
 
-		goal = str(sys.argv[4])
+		start = str(sys.argv[4])
+		goal = str(sys.argv[5])
 
 		#PIDTorqueJaco(p_gains,i_gains,d_gains,j0,j1,j2,j3,j4,j5,j6)
-		PIDTorqueJaco(p_gains,i_gains,d_gains,goal)
+		PIDTorqueJaco(p_gains,i_gains,d_gains,start,goal)
 	
