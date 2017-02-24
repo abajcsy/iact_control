@@ -119,13 +119,15 @@ class PIDTorqueJaco(object):
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 		
 		# TODO sets max execution time
-		self.T = 20
+		self.T = 10.0
 		self.start_T = time.time()
 
 		# TODO THIS IS A HACK
-		start = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
-		self.goal_pos = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
-		self.planner = path_planner.linear_path(start,self.goal_pos,self.T)
+		start = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
+		self.goal_pos = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
+
+		# gets path planner
+		self.planner = path_planner.PathPlanner(start,self.goal_pos,self.T)
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
@@ -139,21 +141,6 @@ class PIDTorqueJaco(object):
 			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
 				line = raw_input()
 				break
-
-			#for i in range(7): 
-			#	print "error at joint" + str(i) + ": " + str(np.abs(self.controller.p_error[i]))
-			#	if np.abs(self.controller.p_error[i]) < epsilon:
-			#		count += 1
-
-			#if count is 7:
-			#	if self.target_name == "candlestick":
-			#		print "SWITCHING TO CANDLESTICK GOAL"
-			#		self.target_pos = np.array(home_pos).reshape((7,1))* (math.pi/180.0)
-			#		self.target_name = "home"
-			#	elif self.target_name == "home":
-			#		print "SWITCHING TO HOME GOAL"
-			#		self.target_pos = np.array(candlestick_pos).reshape((7,1))* (math.pi/180.0)
-			#		self.target_name = "candlestick"
 
 			self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
 			r.sleep()
@@ -254,8 +241,8 @@ class PIDTorqueJaco(object):
 
 		# TODO THIS IS EXPERIMENTAL
 		t = time.time() - self.start_T
-		for i in range(7):
-			self.target_pos[i][0] = self.planner[i](t)
+		self.target_pos = self.planner.linear_path(t)
+
 		print "t:" + str(t)
 		print "curr_pos = " + str(curr_pos)
 		print "target_pos = " + str(self.target_pos)
