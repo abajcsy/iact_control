@@ -26,12 +26,9 @@ class PathPlanner(object):
 		"""
 		Returns linear (in C-space) time-parametrized lambda function for each joint
 		"""
-		print "s:"+str(self.s)+", g:" + str(self.g) + ", T:" + str(self.T)
-		print "g-s:"+str(self.g-self.s)
 		theta = (self.g-self.s)*(1/self.T)*t + self.s
-		print "theta:" + str(theta)
 
-		# if after the timestep, then just go to goal
+		# if time after the final time, then just go to goal
 		if t > self.T:
 			theta = self.g
 

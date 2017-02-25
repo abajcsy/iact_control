@@ -131,8 +131,9 @@ class PIDTorqueJaco(object):
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 		
 		# TODO sets max execution time
-		self.T = 1.0
-		self.start_T = time.time()
+		self.T = 10.0
+		self.process_start_T = time.time() # keeps running time since beginning of program execution
+		self.path_start_T = None # keeps running time since beginning of path
 
 		# gets path planner
 		self.planner = planner.PathPlanner(self.start_pos,self.goal_pos,self.T)
@@ -154,7 +155,8 @@ class PIDTorqueJaco(object):
 			r.sleep()
 
 		# plot the error over time after finished
-		self.plotter.plot_PID()
+		tot_path_time = time.time() - self.path_start_T
+		self.plotter.plot_PID(tot_path_time)
 
 		# switch back to position control 
 		service_address = prefix + '/in/set_torque_control_mode'	
@@ -227,7 +229,8 @@ class PIDTorqueJaco(object):
 		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
 
 		# update the plot of joint torques over time
-		self.plotter.update_joint_torque(torque_curr)
+		t = time.time() - self.process_start_T
+		self.plotter.update_joint_torque(torque_curr, t)
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -254,7 +257,9 @@ class PIDTorqueJaco(object):
 			if is_at_start:
 				print "REACHED START"
 				self.reached_start = True
-				self.start_T = time.time()
+				self.path_start_T = time.time()
+				# for plotting, save time when path execution started
+				self.plotter.set_path_start_time(time.time() - self.process_start_T)
 			else:
 				print "NOT AT START"
 				# set starting position as goal
@@ -262,7 +267,7 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED START & EXECUTING PATH"
 			# TODO THIS IS EXPERIMENTAL
-			t = time.time() - self.start_T
+			t = time.time() - self.path_start_T
 			print "t:" + str(t)
 			self.target_pos = self.planner.linear_path(t)
 		
@@ -284,7 +289,8 @@ class PIDTorqueJaco(object):
 
 		# update plotter with new error measurement and torque command
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
-		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau)
+		curr_time = time.time() - self.process_start_T
+		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
 
 
 if __name__ == '__main__':
