@@ -107,7 +107,7 @@ class Plotter(object):
 			# plot +/- 1 standard deviation around mean
 			ax.fill_between(t, stdev_low, stdev_high, facecolor=base_line.get_color(), alpha=0.2)
 		plt.axvline(self.path_start_time, color='#808080')
-		plt.ylabel("joint torque (Nm)")
+		plt.ylabel("measuresd torque (Nm)")
 		plt.legend(prop={'size':10})
 		plt.grid()
 
@@ -118,7 +118,7 @@ class Plotter(object):
 			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, label=l)
 		plt.xlabel("time (s)")
 		plt.axvline(self.path_start_time, color='#808080')
-		plt.ylabel("cmd (deg/s)")
+		plt.ylabel("cmd torque (Nm)")
 		plt.legend(prop={'size':10})
 		plt.grid()
 

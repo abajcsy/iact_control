@@ -1,8 +1,8 @@
 <launch>
 
-	<arg name="p_gain" default="15"/>
+	<arg name="p_gain" default="18"/>
 	<arg name="i_gain" default="0"/>
-	<arg name="d_gain" default="0"/>
+	<arg name="d_gain" default="2"/>
 
 	<arg name="iact_flag" default="0"/>
 	<arg name="start" default="candlestick"/>
