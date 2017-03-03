@@ -23,6 +23,7 @@ import planner
 import kinova_msgs.msg
 import geometry_msgs.msg
 import std_msgs.msg
+import sensor_msgs.msg
 from kinova_msgs.srv import *
 from std_msgs.msg import Float32
 from sympy import Point, Line
@@ -82,6 +83,8 @@ class PIDTorqueJaco(object):
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
 		# create subscriber to joint_torques
 		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
+		# create subscriber to joint_state
+		rospy.Subscriber(prefix + '/out/joint_state', sensor_msgs.msg.JointState, self.joint_state_callback, queue_size=1)
 
 		# set goal configuration
 		goal_config = None
@@ -146,7 +149,7 @@ class PIDTorqueJaco(object):
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 		
 		# scaling on speed
-		self.alpha = 0.5
+		self.alpha = 0.9
 		# sets max execution time proportional to distance
 		self.T = (linalg.norm(self.start_pos-self.goal_pos)**2)*self.alpha
 
@@ -260,6 +263,17 @@ class PIDTorqueJaco(object):
 		t = time.time() - self.process_start_T
 		self.plotter.update_joint_torque(torque_curr, t)
 
+	def joint_state_callback(self, msg):
+		"""
+		Reads the latest vel sensed by the robot and records it for 
+		plotting & analysis
+		"""
+		j_vel = np.array([msg.velocity[0],msg.velocity[1],msg.velocity[2],msg.velocity[3],msg.velocity[4],msg.velocity[5],msg.velocity[6]]).reshape((7,1))
+
+		# update the plot of joint torques over time
+		t = time.time() - self.process_start_T
+		self.plotter.update_joint_vel(j_vel, t)
+
 	def joint_angles_callback(self, msg):
 		"""
 		Reads the latest position of the robot and publishes an
@@ -275,7 +289,6 @@ class PIDTorqueJaco(object):
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
 		self.update_target_pos(curr_pos)
-		print "T: " + str(self.T)
 
 		# update torque from PID based on current position
 		self.torque = self.PID_control(curr_pos)
@@ -290,7 +303,7 @@ class PIDTorqueJaco(object):
 		# update plotter with new error measurement, torque command, and path time
 		curr_time = time.time() - self.process_start_T
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
-		print "cmd_tau: " + str(cmd_tau)
+		print "dist to target: " + str(self.target_pos - curr_pos)
 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
 
@@ -324,8 +337,14 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED START --> EXECUTING PATH"
 			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
-			print "t:" + str(t)
+			#(self.T, self.target_pos) = self.planner.LFPB(t)
+			(self.T, self.target_pos) = self.planner.third_order_linear(t, curr_pos)
+			#(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
+			t2 = time.time() - self.path_start_T
+			print "t: " + str(t)
+			print "t2: " + str(t2)
+			print "T: " + str(self.T)
+			print "T-t: " + str(self.T-t)
 
 
 if __name__ == '__main__':

@@ -30,6 +30,9 @@ class Plotter(object):
 		self.joint_torques = np.zeros((7,1))
 		self.joint_times = np.zeros(1)
 
+		self.joint_vels = np.zeros((7,1))
+		self.vels_times = np.zeros(1)
+
 		self.path_start_time = 0
 
 	def set_path_start_time(self,t):
@@ -42,6 +45,13 @@ class Plotter(object):
 		self.joint_torques = np.column_stack((self.joint_torques,j_torque))
 		self.joint_times = np.column_stack((self.joint_times,np.array(t)))
 
+	def update_joint_vel(self, j_vel, t):
+		"""
+		Updates joint velocity measurements based on most recent movement.
+		"""
+		self.joint_vels = np.column_stack((self.joint_vels,j_vel))
+		self.vels_times = np.column_stack((self.vels_times,np.array(t)))
+	
 	def update_PID_plot(self, p_e, i_e, d_e, cmd, t):
 		"""
 		Updates the P,I,D errors based on most recent movement.
@@ -88,6 +98,7 @@ class Plotter(object):
 		plt.legend(prop={'size':10})
 		plt.grid()
 
+		
 		# plot joint_torques
 		ax = plt.subplot(5, 1, 4)
 		for i in range(num_joints):	
@@ -112,6 +123,7 @@ class Plotter(object):
 		plt.grid()
 
 		# plot velocity or torque commands over time
+		"""
 		plt.subplot(5, 1, 5)
 		for i in range(num_joints):	
 			l = "j"+str(i)
@@ -119,6 +131,18 @@ class Plotter(object):
 		plt.xlabel("time (s)")
 		plt.axvline(self.path_start_time, color='#808080')
 		plt.ylabel("cmd torque (Nm)")
+		plt.legend(prop={'size':10})
+		plt.grid()
+		"""
+
+		# plot velocity measured
+		plt.subplot(5, 1, 5)
+		for i in range(num_joints):	
+			l = "j"+str(i)
+			plt.plot(self.vels_times[0], self.joint_vels[i], '-', linewidth=3.0, label=l)
+		plt.xlabel("time (s)")
+		plt.axvline(self.path_start_time, color='#808080')
+		plt.ylabel("measured vel (rad/s)")
 		plt.legend(prop={'size':10})
 		plt.grid()
 
