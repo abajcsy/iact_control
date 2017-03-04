@@ -33,10 +33,16 @@ from numpy import linalg
 import matplotlib.pyplot as plt
 
 prefix = 'j2s7s300_driver'
+
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
+
 pos1 = [14.30,162.95,190.75,124.03,176.10,188.25,167.94]
 pos2 = [121.89,159.32,213.20,109.06,153.09,185.10,170.77]
+
+waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
+waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
+waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 
 epsilon = 0.06
 
@@ -96,6 +102,8 @@ class PIDTorqueJaco(object):
 			goal_config = pos1
 		elif goal == "pos2":
 			goal_config = pos2
+		elif goal == "waypt3":
+			goal_config = waypt3
 		else: # default goal is home position
 			goal_config = home_pos
 
@@ -108,6 +116,8 @@ class PIDTorqueJaco(object):
 			start_config = pos1
 		elif start == "pos2":
 			start_config = pos2
+		elif start == "waypt1":
+			start_config = waypt1
 		else: # default start is candlestick 
 			start_config = candlestick_pos
 			
@@ -116,11 +126,11 @@ class PIDTorqueJaco(object):
 		print "Goal config: " + str(goal_config)
 
 		# save intermediate target position from degrees (default) to radians 
-		self.target_pos = np.array(start_config).reshape((7,1))* (math.pi/180.0)
+		self.target_pos = np.array(start_config).reshape((7,1))*(math.pi/180.0)
 		# save start configuratoin of arm
-		self.start_pos = np.array(start_config).reshape((7,1))* (math.pi/180.0)
+		self.start_pos = np.array(start_config).reshape((7,1))*(math.pi/180.0)
 		# save final goal configuration
-		self.goal_pos = np.array(goal_config).reshape((7,1))* (math.pi/180.0)
+		self.goal_pos = np.array(goal_config).reshape((7,1))*(math.pi/180.0)
 	
 		# track if you have gotten to start of path
 		self.reached_start = False
@@ -160,6 +170,8 @@ class PIDTorqueJaco(object):
 
 		# gets path planner
 		self.planner = planner.PathPlanner(self.start_pos,self.goal_pos,self.T,self.alpha)
+		self.deltaT = [2.0, 2.0]
+		self.waypts = [np.array(waypt1).reshape((7,1))*(math.pi/180.0), np.array(waypt2).reshape((7,1))*(math.pi/180.0), np.array(waypt3).reshape((7,1))*(math.pi/180.0)]
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
@@ -337,14 +349,12 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED START --> EXECUTING PATH"
 			t = time.time() - self.path_start_T
+			(self.T, self.target_pos) = self.planner.time_trajectory(t, self.waypts, self.deltaT)
 			#(self.T, self.target_pos) = self.planner.LFPB(t)
-			(self.T, self.target_pos) = self.planner.third_order_linear(t, curr_pos)
+			#(self.T, self.target_pos) = self.planner.third_order_linear(t, curr_pos)
 			#(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
-			t2 = time.time() - self.path_start_T
 			print "t: " + str(t)
-			print "t2: " + str(t2)
 			print "T: " + str(self.T)
-			print "T-t: " + str(self.T-t)
 
 
 if __name__ == '__main__':
