@@ -1,35 +1,12 @@
 <launch>
 
+	<!-- <node pkg="rviz" type="rviz" name="my_rviz"/> -->
+
 	<arg name="p_gain" default="15"/>
 	<arg name="i_gain" default="0"/>
 	<arg name="d_gain" default="2"/>
 
-	<arg name="iact_flag" default="0"/>
-	<arg name="start" default="candlestick"/>
-	<arg name="goal" default="home"/>
-
-	<!-- HOME POSITION:  -->
-	<arg name="j0" default="103.366"/>
-	<arg name="j1" default="197.13"/>
-	<arg name="j2" default="180.070"/>
-	<arg name="j3" default="43.4309"/>
-	<arg name="j4" default="265.11"/>
-	<arg name="j5" default="257.271"/>
-	<arg name="j6" default="287.9276"/> 
-
-	<!-- CANDLESTICK POSITION: 
-	<arg name="j0" default="180.0"/>
-	<arg name="j1" default="180.0"/>
-	<arg name="j2" default="180.0"/>
-	<arg name="j3" default="180.0"/>
-	<arg name="j4" default="180.0"/>
-	<arg name="j5" default="180.0"/>
-	<arg name="j6" default="180.0"/>  -->
-
-	<!-- VELOCITY PID 
-	<node name="pid_velocity_jaco" pkg="iact_control" type="pid_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg j0) $(arg j1) $(arg j2) $(arg j3) $(arg j4) $(arg j5) $(arg j6) $(arg iact_flag)" output="screen"/> -->
-	
 	<!-- TORQUE PID -->
-	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg start) $(arg goal)" output="screen"/> 
-	
+	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain)" output="screen"/> 
+
 </launch>

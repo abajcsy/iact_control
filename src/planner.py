@@ -19,11 +19,45 @@ class PathPlanner(object):
 		alpha    - scaling factor on total trajectory time 
 	"""
 
-	def __init__(self, start, goal, T, alpha):
-		self.s = start
-		self.g = goal
-		self.T = T
+	def __init__(self, waypts, t_b, deltaT, alpha):	
+		# set first and last waypt as start and goal
+		self.s = waypts[0]
+		self.g = waypts[-1]
 		self.alpha = alpha
+
+		# --- Setup for timed trajectories --- #
+		self.waypts = waypts
+
+		# set up blending time for each waypoint
+		self.t_b = [t_b]*len(waypts)
+		self.t_b[0] = t_b/2.0 # blend time for first waypoint is 
+
+		# compute total trajectory time
+		self.t_f = self.t_b[0]/2.0 + sum(deltaT) + self.t_b[-1]/2.0 
+
+		# compute velocity and acceleration at each segment
+		self.v = [0.0]*(len(waypts)+1)
+		self.a = [0.0]*(len(waypts)+1)
+		for i in range(1,len(waypts)):
+			self.v[i] = (self.waypts[i] - self.waypts[i-1])/deltaT[i-1]
+			self.a[i] = (self.v[i]-self.v[i-1])/self.t_b[i-1]
+
+		print "v: "+str(self.v)
+		print "a: "+str(self.a)
+
+		# compute time, T_i for each of the waypoints i in {1,...n}
+		self.T = [None]*len(waypts)
+		for i in range(len(waypts)):
+			T_sum = 0.0
+			for j in range(i):
+				T_sum += deltaT[j]
+			self.T[i] = self.t_b[0]/2.0 + T_sum
+
+		print "Waypoint times T:" + str(self.T) 
+
+	def get_t_f(self):
+		""" Read-only access to total (final) time of trajectory """
+		return self.t_f
 
 	def linear_path(self,t,curr_pos):
 		"""
@@ -31,15 +65,15 @@ class PathPlanner(object):
 		- Method: 	1st order time-parametrized function
 		"""
 		#self.s = curr_pos
-		#self.T = (linalg.norm(self.s-self.g)**2)*self.alpha
+		#self.t_f = (linalg.norm(self.s-self.g)**2)*self.alpha
 
-		theta = (self.g-self.s)*(1/self.T)*t + self.s
+		theta = (self.g-self.s)*(1/self.t_f)*t + self.s
 
 		# if time after the final time, then just go to goal
-		if t > self.T:
+		if t > self.t_f:
 			theta = self.g
 
-		return (self.T, theta)
+		return (self.t_f, theta)
 
 	def third_order_linear(self, t, curr_pos):
 		"""
@@ -48,101 +82,94 @@ class PathPlanner(object):
 		"""
 		c0 = self.s
 		c1 = 0
-		c2 = 3*(self.g-self.s)/(self.T**2)
-		c3 = -2*(self.g-self.s)/(self.T**3)
+		c2 = 3*(self.g-self.s)/(self.t_f**2)
+		c3 = -2*(self.g-self.s)/(self.t_f**3)
 
 		theta = c0 + c1*t + c2*t**2 +c3*t**3
 
 		# if time after the final time, then just go to goal
-		if t > self.T:
+		if t > self.t_f:
 			theta = self.g
 
-		return (self.T, theta)
+		return (self.t_f, theta)
 
 	def LFPB(self, t):
 		"""
 		Returns time-dependant configuratrion for straight line trajectory. 
 		- Method: 	Linear function with parabolic blend (LFPB)
 		"""
-		v = 2*(self.g-self.s)/self.T 				# max velocity	
-		t_b = (self.s-self.g+v*self.T)/v 			# blending time
+		v = 2*(self.g-self.s)/self.t_f				# max velocity	
+		t_b = (self.s-self.g+v*self.t_f)/v 			# blending time
 
 		a = self.s
 		b = 0.0
 		c = v/(2*t_b)
-		d = (self.s+self.g-v*self.T)/2.0
+		d = (self.s+self.g-v*self.t_f)/2.0
 		e = self.g
 		f = 0.0
-		g = (v*self.T+self.s-self.g+2.0*t_b*(-v))/(2.0*t_b**2)
+		g = (v*self.t_f+self.s-self.g+2.0*t_b*(-v))/(2.0*t_b**2)
 
 		theta = np.array([0.0]*7).reshape((7,1))
 		
 		for i in range(7):
 			if t >= 0.0 and t < t_b[i][0]:
 				theta[i][0] = a[i][0]+t*b+(t**2)*c[i][0]
-			elif t >= t_b[i][0] and t < self.T-t_b[i][0]:
+			elif t >= t_b[i][0] and t < self.t_f-t_b[i][0]:
 				theta[i][0] = d[i][0] + v[i][0]*t
-			elif t >= self.T-t_b[i][0] and t <= self.T:
-				theta[i][0] = e[i][0]+(t-self.T)*f+((t-self.T)**2)*g[i][0]
+			elif t >= self.t_f-t_b[i][0] and t <= self.t_f:
+				theta[i][0] = e[i][0]+(t-self.t_f)*f+((t-self.t_f)**2)*g[i][0]
 			else: # if t > self.T
 				theta[i][0] = self.g[i][0]
 		
-		return (self.T, theta)
+		return (self.t_f, theta)
 
 	
-	def time_trajectory(self, t, waypts, deltaT):
+	def time_trajectory(self, t):
 		"""
 		Times a trajectory made from multiple waypts with parabolic blends
 		- Method: 	Linear functions with parabolic blends (LFPB)
 		- Ref: 		https://smartech.gatech.edu/bitstream/handle/1853/41948/ParabolicBlends.pdf
 		"""
-		# TODO THIS IS WRONG IN THE LONG RUN, JUST EXPERIMENTAL
-		t_b = [1.0]*len(waypts)
-		t_f = t_b[0]/2.0 + (deltaT[0]+deltaT[1]) + t_b[1]/2.0 
-		v = [0, (waypts[1]-waypts[0])/deltaT[0], (waypts[2]-waypts[1])/deltaT[1], 0]
-		a = [0, (v[1]-v[0])/t_b[0], (v[2]-v[1])/t_b[1], 0]
-
-		print "Time to execute traj, t_f: " + str(t_f) 
-
-		# compute time, T_i for each of the waypoints i in {1,...n}
-		T = [None]*len(waypts)
-		for i in range(len(waypts)):
-			T_sum = 0.0
-			for j in range(i):
-				T_sum += deltaT[j]
-			T[i] = t_b[0]/2.0 + T_sum
-		print "T:" + str(T) 
-
+		print "Time to execute traj, t_f: " + str(self.t_f) 
+		
 		theta = np.array([0.0]*7).reshape((7,1))
 
 		blend_idx = -1
 		# check if in blend phase (and if yes, which one)
 		print "t: " + str(t)
-		for i in range(len(waypts)):
-			if t >= (T[i]-t_b[i]/2.0) and t < (T[i]+t_b[i]/2.0):
+
+		for i in range(len(self.waypts)):		
+			#print self.T[i]
+			#print self.t_b[i]/2.0
+			#print "lower b: " + str(self.T[i]-self.t_b[i]/2.0)
+			#print "upper b: " + str(self.T[i]+self.t_b[i]/2.0)
+			if t >= (self.T[i]-self.t_b[i]/2.0) and t < (self.T[i]+self.t_b[i]/2.0):
 				blend_idx = i
 
 		lin_idx = -1
 		# check if in linear phase (and if yes, which one)
-		for i in range(len(waypts)-1):
-			if t >= (T[i]+t_b[i]/2.0) and t < (T[i+1]-t_b[i+1]/2.0):
+		for i in range(len(self.waypts)-1):
+			#print "lower l: " + str(self.T[i]+self.t_b[i]/2.0)
+			#print "upper l: " + str(self.T[i+1]-self.t_b[i+1]/2.0)
+			if t >= (self.T[i]+self.t_b[i]/2.0) and t < (self.T[i+1]-self.t_b[i+1]/2.0):
 				lin_idx = i
 
 		print "blend_idx: " + str(blend_idx) + ", lin_idx: " + str(lin_idx)
 
-		# in blend phase
-		if blend_idx != -1 and lin_idx == -1:
-			print "blend phase"
+		if blend_idx != -1 and lin_idx == -1: 
+			# in blend phase
+			print "blend phase, waypt #"+ str(blend_idx)
 			i = blend_idx
-			theta = waypts[i] + v[i]*(t-T[i])+0.5*a[i]*(t-T[i]+(t_b[i]/2.0))**2
+			theta = self.waypts[i] + self.v[i]*(t-self.T[i])+0.5*self.a[i]*(t-self.T[i]+(self.t_b[i]/2.0))**2
 		elif blend_idx == -1 and lin_idx != -1:
-		# in linear phase
-			print "linear phase"
+			# in linear phase
+			print "linear phase, waypt #"+ str(lin_idx)
 			i = lin_idx
-			theta = waypts[i] + v[i+1]*(t-T[i])
+			theta = self.waypts[i] + self.v[i+1]*(t-self.T[i])
 		elif blend_idx == -1 and lin_idx == -1:
+			# just set last waypoint as goal
 			print "past goal time"
-			theta = waypts[-1] # just set last waypoint as goal
+			theta = self.waypts[-1] 
 		
 		print "theta: " + str(theta)
 		return (self.T, theta)			
@@ -158,12 +185,12 @@ if __name__ == '__main__':
 	waypt3 = np.array([338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]).reshape((7,1))*(math.pi/180.0)
 
 	waypts = [waypt1, waypt2, waypt3]
-	deltaT = [2.0, 2.0]
+	deltaT = [5.0, 5.0]
+	t_b = 1.0
 	print "waypt1:"+str(waypt1)
 	print "waypt2:"+str(waypt2)
 	print "waypt3:"+str(waypt3)
-	planner = PathPlanner(s,g,T_total,alpha)
-	(T_total, theta) = planner.LFPB(2.0)
-	(T_total, theta) = planner.time_trajectory(4.5, waypts, deltaT)
-	print theta
+	planner = PathPlanner(waypts, t_b, deltaT, alpha)
+	#(T_total, theta) = planner.LFPB(2.0)
+	(T_total, theta) = planner.time_trajectory(0)
 

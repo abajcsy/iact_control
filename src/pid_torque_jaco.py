@@ -44,6 +44,8 @@ waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
 waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
 waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 
+traj = [waypt1, waypt2, waypt3]
+
 epsilon = 0.06
 
 class PIDTorqueJaco(object): 
@@ -72,11 +74,12 @@ class PIDTorqueJaco(object):
 		j0, ... , j6				  - goal configuration for joints 1-7 (in degrees)
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, start, goal):
+	def __init__(self, p_gain, i_gain, d_gain):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
+		# ---- ROS Setup ---- #
 		rospy.init_node("pid_torque_jaco")
 
 		# switch robot to torque-control mode
@@ -92,48 +95,37 @@ class PIDTorqueJaco(object):
 		# create subscriber to joint_state
 		rospy.Subscriber(prefix + '/out/joint_state', sensor_msgs.msg.JointState, self.joint_state_callback, queue_size=1)
 
-		# set goal configuration
-		goal_config = None
-		if goal == "home":		
-			goal_config = home_pos
-		elif goal == "candlestick":
-			goal_config = candlestick_pos
-		elif goal == "pos1":
-			goal_config = pos1
-		elif goal == "pos2":
-			goal_config = pos2
-		elif goal == "waypt3":
-			goal_config = waypt3
-		else: # default goal is home position
-			goal_config = home_pos
+		# ---- Trajectory Setup ---- #
 
-		start_config = home_pos
-		if start == "home":		
-			start_config = home_pos
-		elif start == "candlestick":
-			start_config = candlestick_pos
-		elif start == "pos1":
-			start_config = pos1
-		elif start == "pos2":
-			start_config = pos2
-		elif start == "waypt1":
-			start_config = waypt1
-		else: # default start is candlestick 
-			start_config = candlestick_pos
-			
+		# list of waypoints along trajectory
+		waypts = [None]*len(traj)
+		for i in range(len(traj)):
+			waypts[i] = np.array(traj[i]).reshape((7,1))*(math.pi/180.0)
 
-		print "Start config: " + str(start_config)
-		print "Goal config: " + str(goal_config)
+		# scaling on speed
+		self.alpha = 0.9 
+
+		# time for each (linear) segment of trajectory
+		deltaT = [2.0, 2.0] 
+		# blending time (sec)
+		t_b = 1.0
+
+		# get trajectory planner
+		self.planner = planner.PathPlanner(waypts, t_b, deltaT, self.alpha)
+
+		# sets max execution time 
+		self.T = self.planner.get_t_f()
 
 		# save intermediate target position from degrees (default) to radians 
-		self.target_pos = np.array(start_config).reshape((7,1))*(math.pi/180.0)
-		# save start configuratoin of arm
-		self.start_pos = np.array(start_config).reshape((7,1))*(math.pi/180.0)
+		self.target_pos = waypts[0]
+		# save start configuration of arm
+		self.start_pos = waypts[0]
 		# save final goal configuration
-		self.goal_pos = np.array(goal_config).reshape((7,1))*(math.pi/180.0)
+		self.goal_pos = waypts[-1]
 	
 		# track if you have gotten to start of path
 		self.reached_start = False
+
 		# TODO THIS IS EXPERIMENTAL
 		self.interaction = False
 
@@ -157,21 +149,11 @@ class PIDTorqueJaco(object):
 
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
-		
-		# scaling on speed
-		self.alpha = 0.9
-		# sets max execution time proportional to distance
-		self.T = (linalg.norm(self.start_pos-self.goal_pos)**2)*self.alpha
 
 		# keeps running time since beginning of program execution
 		self.process_start_T = time.time() 
 		# keeps running time since beginning of path
 		self.path_start_T = None 
-
-		# gets path planner
-		self.planner = planner.PathPlanner(self.start_pos,self.goal_pos,self.T,self.alpha)
-		self.deltaT = [2.0, 2.0]
-		self.waypts = [np.array(waypt1).reshape((7,1))*(math.pi/180.0), np.array(waypt2).reshape((7,1))*(math.pi/180.0), np.array(waypt3).reshape((7,1))*(math.pi/180.0)]
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
@@ -227,7 +209,7 @@ class PIDTorqueJaco(object):
 			print "Service call failed: %s"%e
 			return None	
 
-	def torque_to_JointTorqueMsg(self, ):
+	def torque_to_JointTorqueMsg(self):
 		"""
 		Returns a JointTorque Kinova msg from an array of torques
 		"""
@@ -315,6 +297,9 @@ class PIDTorqueJaco(object):
 		# update plotter with new error measurement, torque command, and path time
 		curr_time = time.time() - self.process_start_T
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
+
+		#print "target_pos: " + str(self.target_pos)
+		#print "curr_pos: " + str(curr_pos)
 		print "dist to target: " + str(self.target_pos - curr_pos)
 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
@@ -349,10 +334,7 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED START --> EXECUTING PATH"
 			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.time_trajectory(t, self.waypts, self.deltaT)
-			#(self.T, self.target_pos) = self.planner.LFPB(t)
-			#(self.T, self.target_pos) = self.planner.third_order_linear(t, curr_pos)
-			#(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
+			(self.T, self.target_pos) = self.planner.time_trajectory(t)
 			print "t: " + str(t)
 			print "T: " + str(self.T)
 
@@ -365,8 +347,8 @@ if __name__ == '__main__':
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
 
-		start = str(sys.argv[4])
-		goal = str(sys.argv[5])
+		#start = str(sys.argv[4])
+		#goal = str(sys.argv[5])
 
-		PIDTorqueJaco(p_gains,i_gains,d_gains,start,goal)
+		PIDTorqueJaco(p_gains,i_gains,d_gains)
 	
