@@ -25,11 +25,13 @@ class Plotter(object):
 		self.i_error = np.zeros((7,1))
 		self.d_error = np.zeros((7,1))
 
+		# for tracking applied command torque
 		self.cmd = np.zeros((7,1))
 
+		# for tracking measured torque
 		self.joint_torques = np.zeros((7,1))
 		self.joint_times = np.zeros(1)
-
+		
 		self.joint_vels = np.zeros((7,1))
 		self.vels_times = np.zeros(1)
 
@@ -87,7 +89,7 @@ class Plotter(object):
 		"""
 	
 		# plot p_error
-		ax = plt.subplot(5, 1, 1)
+		ax = plt.subplot(6, 1, 1)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.p_error[i], '-', linewidth=3.0, label=l)
@@ -99,7 +101,7 @@ class Plotter(object):
 		plt.grid()
 
 		# plot i_error
-		plt.subplot(5, 1, 2)
+		plt.subplot(6, 1, 2)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.i_error[i], '-', linewidth=3.0, label=l)
@@ -109,7 +111,7 @@ class Plotter(object):
 		plt.grid()
 
 		# plot d_error
-		plt.subplot(5, 1, 3)
+		plt.subplot(6, 1, 3)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.d_error[i], '-', linewidth=3.0, label=l)
@@ -120,7 +122,7 @@ class Plotter(object):
 
 		
 		# plot joint_torques
-		ax = plt.subplot(5, 1, 4)
+		ax = plt.subplot(6, 1, 4)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			t = self.joint_times[0]
@@ -142,9 +144,8 @@ class Plotter(object):
 		plt.legend(prop={'size':10})
 		plt.grid()
 
-		# plot velocity or torque commands over time
-		"""
-		plt.subplot(5, 1, 5)
+		# plot torque commands over time
+		plt.subplot(6, 1, 5)
 		for i in range(num_joints):	
 			l = "j"+str(i)
 			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, label=l)
@@ -153,9 +154,20 @@ class Plotter(object):
 		plt.ylabel("cmd torque (Nm)")
 		plt.legend(prop={'size':10})
 		plt.grid()
-		"""
+
+		# plot difference between command torque and measured torque
+		plt.subplot(6, 1, 6)
+		for i in range(num_joints):	
+			l = "j"+str(i)
+			plt.plot(self.times[0], self.cmd[i]-self.joint_torques[i], '-', linewidth=3.0, label=l)
+		plt.xlabel("time (s)")
+		plt.axvline(self.path_start_time, color='#808080')
+		plt.ylabel("cmd - measured tau")
+		plt.legend(prop={'size':10})
+		plt.grid()
 
 		# plot velocity measured
+		"""
 		plt.subplot(5, 1, 5)
 		for i in range(num_joints):	
 			l = "j"+str(i)
@@ -165,6 +177,7 @@ class Plotter(object):
 		plt.ylabel("measured vel (rad/s)")
 		plt.legend(prop={'size':10})
 		plt.grid()
+		"""
 
 		plt.show()
 		
