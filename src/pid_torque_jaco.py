@@ -355,22 +355,17 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED GOAL --> RE-EXECUTING PATH"
 
-			#print "OLD start: " + str(self.start_pos)
-			#print "OLD goal: " + str(self.goal_pos)
-
 			old_start = np.copy(self.start_pos)
 			self.target_pos = self.goal_pos
+
 			# save start configuration of arm
 			self.start_pos = self.goal_pos
 			# save final goal configuration
 			self.goal_pos = old_start
 
-			#print "NEW start: " + str(self.start_pos)
-			#print "NEW goal: " + str(self.goal_pos)
 
-			# update planner
-			# TODO WARNING!: THIS IS NOT FIXED FOR > 2 WAYPOINTS. 
-			# TODO Need to reverse order of waypts in trajectory to replay from start
+			# TODO WARNING!: REPLAYING TRAJECTORY
+			# DOES NOT WORK FOR > 2 WAYPOINTS. 
 
 			# set new start and goal positions in the planner
 			self.planner.s = self.start_pos
@@ -392,9 +387,6 @@ if __name__ == '__main__':
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
-
-		#start = str(sys.argv[4])
-		#goal = str(sys.argv[5])
 
 		PIDTorqueJaco(p_gains,i_gains,d_gains)
 	
