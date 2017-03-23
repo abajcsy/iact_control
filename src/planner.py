@@ -33,7 +33,10 @@ class PathPlanner(object):
 		self.t_b[0] = t_b/2.0 # blend time for first waypoint is 
 
 		# compute total trajectory time
-		self.t_f = self.t_b[0]/2.0 + sum(deltaT) + self.t_b[-1]/2.0 
+		#TODO CHOOSE THE RIGHT TIME
+	#	self.t_f = self.t_b[0]/2.0 + sum(deltaT) + self.t_b[-1]/2.0 
+		self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
+		self.total_t = self.alpha*(linalg.norm(self.s-self.g)**2)
 
 		# compute velocity and acceleration at each segment
 		self.v = [0.0]*(len(waypts)+1)
@@ -61,19 +64,57 @@ class PathPlanner(object):
 
 	def linear_path(self,t,curr_pos):
 		"""
-		Returns time-dependant configuratrion for straight line trajectory. 
-		- Method: 	1st order time-parametrized function
+		experimental...
 		"""
-		#self.s = curr_pos
-		#self.t_f = (linalg.norm(self.s-self.g)**2)*self.alpha
+
+		"""
+		if t > 5.0 and t < 5.5:
+			self.alpha = self.alpha*0.97
+			self.s = curr_pos
+			self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
+			
+		if t > 6.5:
+			self.alpha = self.alpha*2.5
+			if self.alpha > 20.0:
+				self.alpha = 35.0
+			self.s = curr_pos
+			self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
+		"""
+
+		self.s = curr_pos
+		self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
 
 		theta = (self.g-self.s)*(1/self.t_f)*t + self.s
 
+		print "alpha: " + str(self.alpha)
+		print "total t: " + str(self.total_t)
+		print "t_f: " + str(self.t_f)
 		# if time after the final time, then just go to goal
 		if t > self.t_f:
 			theta = self.g
 
 		return (self.t_f, theta)
+
+	def linear_path_retimed(self,t,curr_pos):
+		"""
+		Returns time-dependant configuratrion for straight line trajectory. 
+		- Method: 	1st order time-parametrized function
+		"""
+
+		self.s = curr_pos
+		self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
+
+		theta = (self.g-self.s)*(1/self.t_f)*t + self.s
+
+		print "alpha: " + str(self.alpha)
+		print "total t: " + str(self.total_t)
+		print "t_f: " + str(self.t_f)
+
+		# if time after the final time, then just go to goal
+		if t > self.t_f:
+			theta = self.g
+
+		return (self.t_f, theta, self.s)
 
 	def third_order_linear(self, t, curr_pos):
 		"""

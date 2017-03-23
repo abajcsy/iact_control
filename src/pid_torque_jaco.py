@@ -46,7 +46,7 @@ waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 
 traj = [waypt1, waypt2, waypt3]
 
-epsilon = 0.06
+epsilon = 0.08
 
 class PIDTorqueJaco(object): 
 	"""
@@ -103,7 +103,7 @@ class PIDTorqueJaco(object):
 			waypts[i] = np.array(traj[i]).reshape((7,1))*(math.pi/180.0)
 
 		# scaling on speed
-		self.alpha = 0.9 
+		self.alpha = 1.0
 
 		# time for each (linear) segment of trajectory
 		deltaT = [2.0, 2.0] 
@@ -123,8 +123,9 @@ class PIDTorqueJaco(object):
 		# save final goal configuration
 		self.goal_pos = waypts[-1]
 	
-		# track if you have gotten to start of path
+		# track if you have gotten to start/goal of path
 		self.reached_start = False
+		self.reached_goal = False
 
 		# TODO THIS IS EXPERIMENTAL
 		self.interaction = False
@@ -334,10 +335,55 @@ class PIDTorqueJaco(object):
 		else:
 			print "REACHED START --> EXECUTING PATH"
 			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.time_trajectory(t)
+			(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
+			#(self.T, self.target_pos) = self.planner.time_trajectory(t)
 			print "t: " + str(t)
 			print "T: " + str(self.T)
 
+		# check if the arm reached the goal, and restart path
+		if not self.reached_goal:
+			dist_from_goal = np.fabs(curr_pos - self.goal_pos)
+
+			# check if every joint is close enough to goal configuration
+			close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]
+			
+			# if all joints are close enough, robot is at goal
+			is_at_goal = all(close_to_goal)
+			
+			if is_at_goal:
+				self.reached_goal = True
+		else:
+			print "REACHED GOAL --> RE-EXECUTING PATH"
+
+			#print "OLD start: " + str(self.start_pos)
+			#print "OLD goal: " + str(self.goal_pos)
+
+			old_start = np.copy(self.start_pos)
+			self.target_pos = self.goal_pos
+			# save start configuration of arm
+			self.start_pos = self.goal_pos
+			# save final goal configuration
+			self.goal_pos = old_start
+
+			#print "NEW start: " + str(self.start_pos)
+			#print "NEW goal: " + str(self.goal_pos)
+
+			# update planner
+			# TODO WARNING!: THIS IS NOT FIXED FOR > 2 WAYPOINTS. 
+			# TODO Need to reverse order of waypts in trajectory to replay from start
+
+			# set new start and goal positions in the planner
+			self.planner.s = self.start_pos
+			self.planner.g = self.goal_pos
+
+			# update new path start time
+			self.path_start_T = time.time()
+
+			# compute new total time for path to execute
+			self.planner.t_f = self.alpha*(linalg.norm(self.start_pos-self.goal_pos)**2)
+			self.planner.total_t = self.planner.total_t + self.alpha*(linalg.norm(self.start_pos-self.goal_pos)**2)
+
+			self.reached_goal = False
 
 if __name__ == '__main__':
 	if len(sys.argv) < 6:

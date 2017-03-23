@@ -66,6 +66,26 @@ class Plotter(object):
 		"""
 		Plots the P,I,D errors over time.
 		"""
+
+		"""
+		# check that all dimensions match up. If not, correct
+		min_len = len(self.times[0])
+		min_o = self.times
+		need_correction = False
+		objs = [self.times, self.i_error, self.p_error, self.d_error, self.joint_vels, self.joint_torques]
+		for o in objs:
+			if len(o[0]) < min_len:
+				min_len = len(o[0])
+				min_o = o
+				need_correction = True
+		
+		if need_correction:
+			for o in objs:
+				if o is not min_o:
+					diff = np.abs(len(o[0]) - min_len)
+					o = o[:,0:diff]
+		"""
+	
 		# plot p_error
 		ax = plt.subplot(5, 1, 1)
 		for i in range(num_joints):	
