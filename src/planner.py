@@ -64,39 +64,6 @@ class PathPlanner(object):
 
 	def linear_path(self,t,curr_pos):
 		"""
-		experimental...
-		"""
-
-		"""
-		if t > 5.0 and t < 5.5:
-			self.alpha = self.alpha*0.97
-			self.s = curr_pos
-			self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
-			
-		if t > 6.5:
-			self.alpha = self.alpha*2.5
-			if self.alpha > 20.0:
-				self.alpha = 35.0
-			self.s = curr_pos
-			self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
-		"""
-
-		self.s = curr_pos
-		self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
-
-		theta = (self.g-self.s)*(1/self.t_f)*t + self.s
-
-		print "alpha: " + str(self.alpha)
-		print "total t: " + str(self.total_t)
-		print "t_f: " + str(self.t_f)
-		# if time after the final time, then just go to goal
-		if t > self.t_f:
-			theta = self.g
-
-		return (self.t_f, theta)
-
-	def linear_path_retimed(self,t,curr_pos):
-		"""
 		Returns time-dependant configuratrion for straight line trajectory. 
 		- Method: 	1st order time-parametrized function
 		"""
@@ -114,7 +81,7 @@ class PathPlanner(object):
 		if t > self.t_f:
 			theta = self.g
 
-		return (self.t_f, theta, self.s)
+		return (self.t_f, theta)
 
 	def third_order_linear(self, t, curr_pos):
 		"""
