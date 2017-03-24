@@ -71,7 +71,6 @@ class PIDTorqueJaco(object):
 	
 	Required parameters:
 		p_gain, i_gain, d_gain    - gain terms for the PID controller
-		j0, ... , j6				  - goal configuration for joints 1-7 (in degrees)
 	"""
 
 	def __init__(self, p_gain, i_gain, d_gain):
