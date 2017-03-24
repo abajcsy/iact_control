@@ -333,8 +333,15 @@ class PIDTorqueJaco(object):
 				self.target_pos = self.start_pos
 		else:
 			print "REACHED START --> EXECUTING PATH"
+
+			# NOTE: 
+			# for replanning, have to set start time to current time
+			# and define delta timestep into the future to update target_pos
+			self.path_start_T = time.time()
+			delta = 0.5
+
 			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.linear_path(t, curr_pos)
+			(self.T, self.target_pos) = self.planner.linear_path(t+delta, curr_pos)
 			#(self.T, self.target_pos) = self.planner.time_trajectory(t)
 			print "t: " + str(t)
 			print "T: " + str(self.T)
