@@ -67,13 +67,14 @@ class PIDTorqueJaco(object):
 		/j2s7s300_driver/out/joint_angles	- Jaco joint angles
 	
 	Publishes to:
-		/j2s7s300_driver/in/joint_torques	- Jaco joint torques
+		/j2s7s300_driver/in/joint_torque	- Jaco joint torques
 	
 	Required parameters:
 		p_gain, i_gain, d_gain    - gain terms for the PID controller
+		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain):
+	def __init__(self, p_gain, i_gain, d_gain, sim_flag):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -81,8 +82,9 @@ class PIDTorqueJaco(object):
 		# ---- ROS Setup ---- #
 		rospy.init_node("pid_torque_jaco")
 
-		# switch robot to torque-control mode
-		self.init_torque_mode()
+		# switch robot to torque-control mode if not in simulation
+		if not sim_flag:
+			self.init_torque_mode()
 
 		# create joint-torque publisher
 		self.torque_pub = rospy.Publisher(prefix + '/in/joint_torque', kinova_msgs.msg.JointTorque, queue_size=1)
@@ -174,17 +176,18 @@ class PIDTorqueJaco(object):
 		tot_path_time = time.time() - self.path_start_T
 		self.plotter.plot_PID(tot_path_time)
 
-		# switch back to position control after finished 
-		service_address = prefix + '/in/set_torque_control_mode'	
-		rospy.wait_for_service(service_address)
-		try:
-			switchTorquemode = rospy.ServiceProxy(service_address, SetTorqueControlMode)
-			switchTorquemode(0)
-			return None
-		except rospy.ServiceException, e:
-			print "Service call failed: %s"%e
-			#return None
-
+		# switch back to position control after finished if not in simulation
+		if not sim_flag:
+			service_address = prefix + '/in/set_torque_control_mode'	
+			rospy.wait_for_service(service_address)
+			try:
+				switchTorquemode = rospy.ServiceProxy(service_address, SetTorqueControlMode)
+				switchTorquemode(0)
+				return None
+			except rospy.ServiceException, e:
+				print "Service call failed: %s"%e
+				#return None
+		
 	def init_torque_mode(self):
 		"""
 		Switches Jaco to torque-control mode using ROS services
@@ -387,12 +390,13 @@ class PIDTorqueJaco(object):
 			self.reached_goal = False
 
 if __name__ == '__main__':
-	if len(sys.argv) < 6:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, start, goal."
+	if len(sys.argv) < 5:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, sim_flag."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
+		sim_flag = int(sys.argv[4])
 
-		PIDTorqueJaco(p_gains,i_gains,d_gains)
+		PIDTorqueJaco(p_gains,i_gains,d_gains,sim_flag)
 	

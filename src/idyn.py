@@ -37,13 +37,16 @@ def compute_idyn(robot):
 	#print "tau: " + str(tau_M + tau_C + tau_G)
 	print "tau: " + str(tau)
 
+	return tau
+
 if __name__ == '__main__':
 	# setup robot and environment
-	env, robot = initialize()
+	model_filename = 'jaco_dynamics'
+	env, robot = initialize(model_filename)
 
 	physics = RaveCreatePhysicsEngine(env,'ode')
 	env.SetPhysicsEngine(physics)
-	physics.SetGravity(np.array((0,0,0))) #(0,0,-9.8)
+	physics.SetGravity(np.array((0,0,0))) #should be (0,0,-9.8)
 
 	env.StopSimulation()
 	env.StartSimulation(timestep=0.001)
@@ -56,7 +59,8 @@ if __name__ == '__main__':
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
 
 	while True:
-		torques = 100*(numpy.random.rand(robot.GetDOF())-0.5)
+		torques = compute_idyn(robot)
+		#torques = 100*(numpy.random.rand(robot.GetDOF())-0.5)
 		print torques
 		for i in range(100):
 			robot.SetJointTorques(torques,True)

@@ -6,7 +6,6 @@ Author: Andrea Bajcsy (abajcsy@eecs.berkeley.edu)
 """
 import roslib; roslib.load_manifest('kinova_demo')
 
-
 import time
 import math
 from openravepy import *
@@ -43,10 +42,10 @@ class TorqueController(object):
 		Parameters:
 		  robot     robot model from OpenRAVE
 		"""
-		self.robot = robot
-		self.reset()
+		self._robot = robot
+		self.reset(robot)
 
-	def reset(self):
+	def reset(self, robot):
 		""" Reset the state of this torque controller """
 		self._pos_last = np.zeros((7,1)) # save last position for derivative 
 		self._pos = np.zeros((7,1)) # current position
@@ -55,6 +54,14 @@ class TorqueController(object):
 		self._accel = np.zeros((7,1)) # current acceleration
 		self._cmd = np.zeros((7,1)) # command to send
 		self._last_time = None # used for automatic calculation of dt
+
+		self._pos = robot.GetDOFValues()
+		self._vel = robot.GetDOFVelocities()
+
+	@property
+	def robot(self):
+		"""Read-only access to the robot. """
+		return self._robot
 
 	@property
 	def pos(self):
@@ -131,17 +138,17 @@ class TorqueController(object):
 		# set robot DOFs and Vels based on current state
 		pos_vals = self._pos.reshape((7))
 		pos_vals = np.append(pos_vals, [0, 0, 0])
-		robot.SetDOFValues(pos_vals)
+		self.robot.SetDOFValues(pos_vals)
 
 		vel_vals = self._vel.reshape((7))
 		vel_vals = np.append(vel_vals, [0, 0, 0])
-		robot.SetDOFVelocities(vel_vals)
+		self.robot.SetDOFVelocities(vel_vals)
 
 		accel_vals = self._accel.reshape((7))
 		accel_vals = np.append(accel_vals, [0,0,0])
 
 		# compute torques
-		tau = robot.ComputeInverseDynamics(accel_vals)
+		tau = self.robot.ComputeInverseDynamics(accel_vals)
 
 		# format output so you can send to ros topic
 		self._cmd = tau[0:7].reshape((7,1))
@@ -151,7 +158,16 @@ class TorqueController(object):
 		return self._cmd
 
 if __name__ == "__main__":
-	env, robot = initialize()
+	model_filename = 'jaco_dynamics'
+	env, robot = initialize(model_filename)
+
+	physics = RaveCreatePhysicsEngine(env,'ode')
+	env.SetPhysicsEngine(physics)
+	physics.SetGravity(np.array((0,0,0))) #should be (0,0,-9.8)
+
+	env.StopSimulation()
+	env.StartSimulation(timestep=0.001)
+
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6]))
 	viewer = env.GetViewer()
 	viewer.SetCamera([[ 0.94684722, -0.12076704,  0.29815376,  0.21004671],
@@ -162,13 +178,13 @@ if __name__ == "__main__":
 	controller = TorqueController(robot)
 	print controller
 
-	pos = np.array([180,180,180,180,180,180,180]).reshape((7,1))
+	pos = np.array([180,180,180,180,180,180,180]).reshape((7,1))*(math.pi/180.0)
 	controller.update_Tau(pos)
 	print controller
 
 	time.sleep(5)
 
-	pos = np.array([200,180,180,180,180,180,180]).reshape((7,1))
+	pos = np.array([190,180,180,180,180,180,180]).reshape((7,1))*(math.pi/180.0)
 	controller.update_Tau(pos)
 	print controller
 
