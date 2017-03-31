@@ -28,9 +28,12 @@ class Plotter(object):
 		# for tracking applied command torque
 		self.cmd = np.zeros((7,1))
 
-		# for tracking measured torque
+		# for tracking measured torque and force direction
 		self.joint_torques = np.zeros((7,1))
 		self.joint_times = np.zeros(1)
+		# force direction and magnitude
+		self.force_dir = np.zeros(1)
+		self.force_mag = np.zeros(1)
 		
 		self.joint_vels = np.zeros((7,1))
 		self.vels_times = np.zeros(1)
@@ -40,12 +43,15 @@ class Plotter(object):
 	def set_path_start_time(self,t):
 		self.path_start_time = t
 
-	def update_joint_torque(self, j_torque, t):
+	def update_joint_torque(self, j_torque, force_d, force_m, t):
 		"""
 		Updates joint torque measurements based on most recent movement.
 		"""
 		self.joint_torques = np.column_stack((self.joint_torques,j_torque))
 		self.joint_times = np.column_stack((self.joint_times,np.array(t)))
+
+		self.force_dir = np.column_stack((self.force_dir,np.array(force_d)))
+		self.force_mag = np.column_stack((self.force_mag,np.array(force_m)))
 
 	def update_joint_vel(self, j_vel, t):
 		"""
@@ -63,6 +69,61 @@ class Plotter(object):
 		self.d_error = np.column_stack((self.d_error,d_e))
 		self.cmd = np.column_stack((self.cmd,cmd))
 		self.times = np.column_stack((self.times,np.array(t)))
+
+	def plot_tau_PID(self, total_path_time):
+		"""
+		Plots the commanded and measured torques over time.
+		"""
+		c = ['b','g','r','c','m','y','#FF8C00']
+
+		for i in range(num_joints):
+			ax = plt.subplot(7, 1, i+1)
+			l = "j"+str(i)
+			t = self.joint_times[0]
+			torques = self.joint_torques[i]	
+
+			print len(t)
+			print len(self.force_dir)
+
+			# plot the joint torque over time 
+			base_line,  = plt.plot(t, torques, '-', linewidth=3.0, color=c[i], label=str(l)+" measured_tau")
+			# self.times[0]
+			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, color='k', label=str(l)+" cmd_tau")
+			# plot force direction
+			plt.plot(t, self.force_dir[0], '--', linewidth=1.5, color='#808080', label=str(l)+" force dir")
+			# plot force magnitude
+			plt.plot(t, self.force_mag[0], '-', linewidth=1.5, color='#808080', label=str(l)+" force mag")
+
+			plt.axvline(self.path_start_time, color='#808080')
+			if i == 0:
+				plt.title("Measured Torque and P,I,D Torque Command")
+			plt.ylabel("torque (Nm)")
+			plt.legend(prop={'size':10})
+			plt.grid()
+
+			axes = plt.gca()
+			axes.set_xlim([3,15])
+			axes.set_ylim([-10,10])
+
+
+		# plot torque commands over time
+		"""
+		plt.subplot(2, 1, 2)
+		for i in range(num_joints):	
+			l = "j"+str(i)
+			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, label=l)
+		plt.xlabel("time (s)")
+		plt.axvline(self.path_start_time, color='#808080')
+		plt.ylabel("cmd torque (Nm)")
+		plt.legend(prop={'size':10})
+		plt.grid()
+
+		axes = plt.gca()
+		axes.set_xlim([3,10])
+		axes.set_ylim([-12,12])
+		"""
+
+		plt.show()
 
 	def plot_PID(self, total_path_time):
 		"""

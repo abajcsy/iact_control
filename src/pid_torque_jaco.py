@@ -104,6 +104,9 @@ class PIDTorqueJaco(object):
 			waypts[i] = np.array(traj[i]).reshape((7,1))*(math.pi/180.0)
 
 		# scaling on speed
+		# 1.5 = normal speed
+		# 2.5 = slow
+		# 1.0 = fast
 		self.alpha = 1.0
 
 		# time for each (linear) segment of trajectory
@@ -124,6 +127,9 @@ class PIDTorqueJaco(object):
 		# save final goal configuration
 		self.goal_pos = waypts[-1]
 	
+		# save current position of robot since last callback
+		self.curr_pos = self.start_pos
+
 		# track if you have gotten to start/goal of path
 		self.reached_start = False
 		self.reached_goal = False
@@ -174,7 +180,9 @@ class PIDTorqueJaco(object):
 
 		# plot the error over time after finished
 		tot_path_time = time.time() - self.path_start_T
-		self.plotter.plot_PID(tot_path_time)
+
+		#self.plotter.plot_PID(tot_path_time)
+		self.plotter.plot_tau_PID(tot_path_time)
 
 		# switch back to position control after finished if not in simulation
 		if not sim_flag:
@@ -224,7 +232,7 @@ class PIDTorqueJaco(object):
 		jointCmd.joint5 = self.torque[4][4];
 		jointCmd.joint6 = self.torque[5][5];
 		jointCmd.joint7 = self.torque[6][6];
-
+		
 		return jointCmd
 
 	def PID_control(self, pos):
@@ -256,9 +264,29 @@ class PIDTorqueJaco(object):
 			#else: 
 				#self.interaction = False
 
+		# compute dot product of current PID torque and 
+		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
+
+		norm_tau = np.linalg.norm(torque_curr)
+		norm_cmd = np.linalg.norm(cmd_tau)
+
+		dot_tau_cmd = 0.0
+		force_theta = 0.0
+		force_mag = 0.0
+
+		if norm_tau != 0.0 and norm_cmd != 0.0:
+			dot_tau_cmd = np.dot(torque_curr.T, cmd_tau)[0][0]/(norm_tau*norm_cmd)
+			#force_theta = np.arccos(dot_tau_cmd)
+			force_theta = dot_tau_cmd #np.dot(torque_curr.T, (cmd_tau))[0][0]
+			force_mag = norm_tau*np.sign(force_theta)
+
+		print "norm_tau: " + str(norm_tau)
+		print "norm_cmd: " + str(norm_cmd)
+		print "force_theta: " + str(force_theta)
+
 		# update the plot of joint torques over time
 		t = time.time() - self.process_start_T
-		self.plotter.update_joint_torque(torque_curr, t)
+		self.plotter.update_joint_torque(torque_curr, force_theta, force_mag, t)
 
 	def joint_state_callback(self, msg):
 		"""
@@ -281,7 +309,10 @@ class PIDTorqueJaco(object):
 
 		# convert to radians
 		curr_pos = curr_pos*(math.pi/180.0)
-		
+
+		# store current position
+		self.curr_pos = curr_pos		
+
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
@@ -300,6 +331,13 @@ class PIDTorqueJaco(object):
 		# update plotter with new error measurement, torque command, and path time
 		curr_time = time.time() - self.process_start_T
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
+
+		######### TODO THIS IS A TEST #######
+		#if self.reached_start and not self.reached_goal:
+		#	self.torque = np.zeros((7,7))
+		#	cmd_tau = np.zeros((7,1))
+		#	print "ZERO TORQUE SET: " + str(self.torque)
+		#####################################
 
 		#print "target_pos: " + str(self.target_pos)
 		#print "curr_pos: " + str(curr_pos)

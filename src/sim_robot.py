@@ -2,15 +2,16 @@
 # license removed for brevity
 import rospy
 import roslib; roslib.load_manifest('kinova_demo')
-from kinova_msgs.srv import *
-from std_msgs.msg import Float32
+
 import kinova_msgs.msg
 import numpy as np
 import math
 import time
-
-from openravepy import *
 import interactpy
+
+from kinova_msgs.srv import *
+from std_msgs.msg import Float32
+from openravepy import *
 from interactpy import initialize
 
 prefix = 'j2s7s300_driver'
@@ -73,45 +74,46 @@ class SimRobot(object):
 		Reads the latest torque sensed by the robot and records it for 
 		plotting & analysis
 		"""
-		# read the current joint torques from the robot
+		# read the joint torques sent from the controller
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7,0,0,0])	
 
-		print "joint tau: " + str(torque_curr)
+		# apply the torques to the sim robot
 		self.robot.SetJointTorques(torque_curr,True)
-			
-		# save running list of joint torques
-		#self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
-		
-		#for i in range(7):
-		#	if np.fabs(torque_curr[i][0]) > 7:
-		#		print "I HAVE SET THE INTERACTION"
-		#		self.interaction = True
-		#		break
-			#else: 
-				#self.interaction = False
-
-		# update the plot of joint torques over time
-		#t = time.time() - self.process_start_T
-		#self.plotter.update_joint_torque(torque_curr, t)
 
 
 if __name__ == '__main__':
 	model_filename = 'jaco_dynamics'
 	env, robot = initialize(model_filename)
 
+	# enable the physics engine
 	physics = RaveCreatePhysicsEngine(env,'ode')
 	env.SetPhysicsEngine(physics)
-	physics.SetGravity(np.array((0,0,0))) #should be (0,0,-9.8)
+	physics.SetGravity(np.array((0,0,-9.8))) #should be (0,0,-9.8)
 
 	env.StopSimulation()
 	env.StartSimulation(timestep=0.001)
 
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6]))
+
+	# DOF and velocity limits
+	n = robot.GetDOF()
+	dof_lim = robot.GetDOFLimits()
+	vel_lim = robot.GetDOFVelocityLimits()
+
+	print "dof_lim: " + str(dof_lim)
+	print "vel_lim: " + str(vel_lim)
+
+	#robot.SetDOFLimits(-3*np.ones(n),3*np.ones(n))
+	#robot.SetDOFVelocityLimits(100*vel_lim)
+
+	# setup the viewer POV and the background
 	viewer = env.GetViewer()
-	viewer.SetCamera([[ 0.94684722, -0.12076704,  0.29815376,  0.21004671],
-		   [-0.3208323 , -0.42191214,  0.84797216, -1.40675116],
-		   [ 0.0233876 , -0.89855744, -0.43823231,  1.04685986],
-		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
+	viewer.SetCamera([[ 0.05117,  0.09089, -0.99455,  2.74898],
+					   [ 0.99847,  0.01639,  0.05287, -0.17906],
+					   [ 0.02111, -0.99573, -0.08991,  0.98455],
+					   [ 0. , 0. , 0. , 1. ]])
+	viewer.SetBkgndColor([0.2,0.2,0.2])
+	#env.ShowWorldAxes(1)
 
 	try:
 		sim_robot = SimRobot(robot)
