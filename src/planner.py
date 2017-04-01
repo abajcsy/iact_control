@@ -62,12 +62,12 @@ class PathPlanner(object):
 		""" Read-only access to total (final) time of trajectory """
 		return self.t_f
 
-	def linear_path(self,t,curr_pos):
+	def linear_path(self,t,alpha,curr_pos):
 		"""
 		Returns time-dependant configuratrion for straight line trajectory. 
 		- Method: 	1st order time-parametrized function
 		"""
-
+		self.alpha = alpha
 		self.s = curr_pos
 		self.t_f = self.alpha*(linalg.norm(self.s-self.g)**2)
 

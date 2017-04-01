@@ -47,6 +47,7 @@ waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 traj = [waypt1, waypt2, waypt3]
 
 epsilon = 0.08
+interaction_thresh = 5.0
 
 class PIDTorqueJaco(object): 
 	"""
@@ -150,9 +151,24 @@ class PIDTorqueJaco(object):
 		self.d_gain = d_gain
 
 		# P, I, D gains 
-		P = self.p_gain*np.eye(7)
+		#P = self.p_gain*np.eye(7)
+		#I = self.i_gain*np.eye(7)
+		#D = self.d_gain*np.eye(7)
+		P = np.array([[25.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 15.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 15.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 15.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0]])
 		I = self.i_gain*np.eye(7)
-		D = self.d_gain*np.eye(7)
+		D = np.array([[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 8.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0]])
 		self.controller = pid.PID(P,I,D,0,0)
 
 		# stuff for plotting
@@ -283,6 +299,14 @@ class PIDTorqueJaco(object):
 		print "norm_tau: " + str(norm_tau)
 		print "norm_cmd: " + str(norm_cmd)
 		print "force_theta: " + str(force_theta)
+		print "force_mag: " + str(force_mag)
+
+		# if there is an interaction force
+		if self.interaction and np.abs(force_mag) >= interaction_thresh:
+			if np.sign(force_theta) < 0:
+				self.alpha = 5.0
+			else:
+				self.alpha = 0.5
 
 		# update the plot of joint torques over time
 		t = time.time() - self.process_start_T
@@ -382,7 +406,7 @@ class PIDTorqueJaco(object):
 			delta = 0.5
 
 			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.linear_path(t+delta, curr_pos)
+			(self.T, self.target_pos) = self.planner.linear_path(t+delta, self.alpha, curr_pos)
 			#(self.T, self.target_pos) = self.planner.time_trajectory(t)
 			print "t: " + str(t)
 			print "T: " + str(self.T)

@@ -101,9 +101,9 @@ class Plotter(object):
 			plt.legend(prop={'size':10})
 			plt.grid()
 
-			axes = plt.gca()
-			axes.set_xlim([3,15])
-			axes.set_ylim([-10,10])
+			#axes = plt.gca()
+			#axes.set_xlim([3,15])
+			#axes.set_ylim([-10,10])
 
 
 		# plot torque commands over time
