@@ -89,10 +89,10 @@ class Plotter(object):
 			base_line,  = plt.plot(t, torques, '-', linewidth=3.0, color=c[i], label=str(l)+" measured_tau")
 			# self.times[0]
 			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, color='k', label=str(l)+" cmd_tau")
-			# plot force direction
-			plt.plot(t, self.force_dir[0], '--', linewidth=1.5, color='#808080', label=str(l)+" force dir")
+			# plot force theta
+			plt.plot(t, self.force_dir[0], '--', linewidth=1.5, color='#808080', label="force theta")
 			# plot force magnitude
-			plt.plot(t, self.force_mag[0], '-', linewidth=1.5, color='#808080', label=str(l)+" force mag")
+			plt.plot(t, self.force_mag[0], '-', linewidth=1.5, color='#808080', label="force mag")
 
 			plt.axvline(self.path_start_time, color='#808080')
 			if i == 0:
@@ -101,27 +101,9 @@ class Plotter(object):
 			plt.legend(prop={'size':10})
 			plt.grid()
 
-			#axes = plt.gca()
+			axes = plt.gca()
 			#axes.set_xlim([3,15])
-			#axes.set_ylim([-10,10])
-
-
-		# plot torque commands over time
-		"""
-		plt.subplot(2, 1, 2)
-		for i in range(num_joints):	
-			l = "j"+str(i)
-			plt.plot(self.times[0], self.cmd[i], '-', linewidth=3.0, label=l)
-		plt.xlabel("time (s)")
-		plt.axvline(self.path_start_time, color='#808080')
-		plt.ylabel("cmd torque (Nm)")
-		plt.legend(prop={'size':10})
-		plt.grid()
-
-		axes = plt.gca()
-		axes.set_xlim([3,10])
-		axes.set_ylim([-12,12])
-		"""
+			axes.set_ylim([-100,100])
 
 		plt.show()
 

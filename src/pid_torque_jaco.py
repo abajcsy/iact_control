@@ -47,7 +47,7 @@ waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 traj = [waypt1, waypt2, waypt3]
 
 epsilon = 0.08
-interaction_thresh = 5.0
+interaction_thresh = 30.0
 
 class PIDTorqueJaco(object): 
 	"""
@@ -138,7 +138,7 @@ class PIDTorqueJaco(object):
 		# TODO THIS IS EXPERIMENTAL
 		self.interaction = False
 
-		self.max_torque = 20*np.eye(7)
+		self.max_torque = 30*np.eye(7)
 		# stores current COMMANDED joint torques
 		self.torque = np.eye(7) 
 		# stores current joint MEASURED joint torques
@@ -154,18 +154,18 @@ class PIDTorqueJaco(object):
 		#P = self.p_gain*np.eye(7)
 		#I = self.i_gain*np.eye(7)
 		#D = self.d_gain*np.eye(7)
-		P = np.array([[25.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+		P = np.array([[15.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 15.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 15.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 15.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0]])
+					 [0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 15.5, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0]])
 		I = self.i_gain*np.eye(7)
 		D = np.array([[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 8.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 5.5, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0]])
@@ -180,7 +180,10 @@ class PIDTorqueJaco(object):
 		self.path_start_T = None 
 
 		# publish to ROS at 100hz
-		r = rospy.Rate(100) 
+		#TODO Torque control doesn't work unless you are running at 1000Hz at least (but not sure if works)
+		#TODO Noticed weird behavior where torque control dies silently (motors lock up and dont move)
+		#	  if the Hz rate is > 100. :( Need to debug
+		r = rospy.Rate(200) 
 
 		print "----------------------------------"
 		print "Moving robot, press ENTER to quit:"
@@ -291,22 +294,29 @@ class PIDTorqueJaco(object):
 		force_mag = 0.0
 
 		if norm_tau != 0.0 and norm_cmd != 0.0:
-			dot_tau_cmd = np.dot(torque_curr.T, cmd_tau)[0][0]/(norm_tau*norm_cmd)
-			#force_theta = np.arccos(dot_tau_cmd)
-			force_theta = dot_tau_cmd #np.dot(torque_curr.T, (cmd_tau))[0][0]
-			force_mag = norm_tau*np.sign(force_theta)
+			dot_tau_cmd = np.dot(torque_curr.T, cmd_tau)[0][0] #/(norm_tau*norm_cmd)
+			force_theta = np.arccos(dot_tau_cmd/(norm_tau*norm_cmd))*np.sign(dot_tau_cmd)
+			force_mag = dot_tau_cmd
 
 		print "norm_tau: " + str(norm_tau)
 		print "norm_cmd: " + str(norm_cmd)
 		print "force_theta: " + str(force_theta)
-		print "force_mag: " + str(force_mag)
+		print "force_mag: " + str(force_mag).
 
 		# if there is an interaction force
 		if self.interaction and np.abs(force_mag) >= interaction_thresh:
 			if np.sign(force_theta) < 0:
-				self.alpha = 5.0
+				if self.alpha + 0.1 > 10.0:
+					self.alpha = 10.0 
+				else:
+					self.alpha += 0.1
 			else:
-				self.alpha = 0.5
+				if self.alpha - 0.1 < 0.1:
+					self.alpha = 0.1
+				else: 
+					self.alpha -= 0.1
+			# update planner's alpha too
+			self.planner.alpha = self.alpha
 
 		# update the plot of joint torques over time
 		t = time.time() - self.process_start_T
@@ -356,12 +366,12 @@ class PIDTorqueJaco(object):
 		curr_time = time.time() - self.process_start_T
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
 
-		######### TODO THIS IS A TEST #######
+		######### TODO THIS IS A TEST - SENDS ZERO TORQUE #######
 		#if self.reached_start and not self.reached_goal:
 		#	self.torque = np.zeros((7,7))
 		#	cmd_tau = np.zeros((7,1))
 		#	print "ZERO TORQUE SET: " + str(self.torque)
-		#####################################
+		#########################################################
 
 		#print "target_pos: " + str(self.target_pos)
 		#print "curr_pos: " + str(curr_pos)
@@ -403,12 +413,12 @@ class PIDTorqueJaco(object):
 			# for replanning, have to set start time to current time
 			# and define delta timestep into the future to update target_pos
 			self.path_start_T = time.time()
-			delta = 0.5
+			#t = time.time() - self.path_start_T
 
-			t = time.time() - self.path_start_T
-			(self.T, self.target_pos) = self.planner.linear_path(t+delta, self.alpha, curr_pos)
-			#(self.T, self.target_pos) = self.planner.time_trajectory(t)
-			print "t: " + str(t)
+			delta_t = 0.25 # number of seconds to look ahead in the path to move to
+
+			(self.T, self.target_pos) = self.planner.linear_path(delta_t, curr_pos)
+			print "delta_t: " + str(delta_t)
 			print "T: " + str(self.T)
 
 		# check if the arm reached the goal, and restart path
@@ -425,6 +435,8 @@ class PIDTorqueJaco(object):
 				self.reached_goal = True
 		else:
 			print "REACHED GOAL --> RE-EXECUTING PATH"
+			t = time.time() - self.path_start_T
+			print "TOTAL PATH TIME: " + str(t)
 
 			old_start = np.copy(self.start_pos)
 			self.target_pos = self.goal_pos
@@ -446,7 +458,7 @@ class PIDTorqueJaco(object):
 			self.path_start_T = time.time()
 
 			# compute new total time for path to execute
-			self.planner.t_f = self.alpha*(linalg.norm(self.start_pos-self.goal_pos)**2)
+			#self.planner.t_f = self.alpha*(linalg.norm(self.start_pos-self.goal_pos)**2)
 			self.planner.total_t = self.planner.total_t + self.alpha*(linalg.norm(self.start_pos-self.goal_pos)**2)
 
 			self.reached_goal = False

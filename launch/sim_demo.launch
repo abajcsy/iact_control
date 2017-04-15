@@ -7,8 +7,12 @@
 
 	<!-- default is in simulation -->
 	<arg name="sim_flag" default="1"/> 
-
-	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg sim_flag)" output="screen"/> 
+	
+	<!-- velocity-based PID  
+	<node name="pid_vel_jaco" pkg="iact_control" type="pid_vel_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg sim_flag)" output="screen"/> -->
+	
+	<!-- torque-based PID -->
+	<node name="pid_torque_jaco" pkg="iact_control" type="pid_torque_jaco.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg sim_flag)" output="screen"/>  
 
 	<node name="sim_robot" pkg="iact_control" type="sim_robot.py" output="screen"/> 
 
