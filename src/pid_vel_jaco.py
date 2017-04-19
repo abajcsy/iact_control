@@ -309,7 +309,7 @@ class PIDVelJaco(object):
 		# convert to radians
 		curr_pos = curr_pos*(math.pi/180.0)
 		# wrap around angles
-		curr_pos = np.unwrap(curr_pos)
+		#curr_pos = np.unwrap(curr_pos)
 
 		# store current position
 		self.curr_pos = curr_pos		
