@@ -42,7 +42,9 @@ pos2 = [121.89,159.32,213.20,109.06,153.09,185.10,170.77]
 
 waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
 waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
-waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
+#waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
+
+waypt3 = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 
 traj = [waypt1, waypt2, waypt3]
 
@@ -85,6 +87,7 @@ class PIDTorqueJaco(object):
 
 		# switch robot to torque-control mode if not in simulation
 		if not sim_flag:
+			print "Initializing torque mode..."
 			self.init_torque_mode()
 
 		# create joint-torque publisher
@@ -154,22 +157,23 @@ class PIDTorqueJaco(object):
 		#P = self.p_gain*np.eye(7)
 		#I = self.i_gain*np.eye(7)
 		#D = self.d_gain*np.eye(7)
-		P = np.array([[15.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+		self.P = np.array([[40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 15.5, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0]])
-		I = self.i_gain*np.eye(7)
-		D = np.array([[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 5.5, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 40.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 60.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0]])
+		self.I = self.i_gain*np.eye(7)
+		self.D = np.array([[7.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 7.5, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0]])
-		self.controller = pid.PID(P,I,D,0,0)
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
+
+		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
@@ -180,10 +184,9 @@ class PIDTorqueJaco(object):
 		self.path_start_T = None 
 
 		# publish to ROS at 100hz
-		#TODO Torque control doesn't work unless you are running at 1000Hz at least (but not sure if works)
 		#TODO Noticed weird behavior where torque control dies silently (motors lock up and dont move)
 		#	  if the Hz rate is > 100. :( Need to debug
-		r = rospy.Rate(200) 
+		r = rospy.Rate(100) 
 
 		print "----------------------------------"
 		print "Moving robot, press ENTER to quit:"
@@ -192,7 +195,28 @@ class PIDTorqueJaco(object):
 
 			if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
 				line = raw_input()
-				break
+				splt = line.split()
+
+				if len(splt) == 3:
+					joint_num = int(splt[1])
+					# sanity check
+					if joint_num > 6 or joint_num < 0:
+						print "OUT OF BOUNDS JOINT NUM"
+						break
+					gain = float(splt[2])
+					if splt[0] == 'd':
+						# modifying d gains			
+						self.D[joint_num][joint_num] = gain
+					elif splt[0] == "p":
+						# modifying p gains
+						self.P[joint_num][joint_num] = gain
+						
+					self.controller.set_gains(self.P, self.I, self.D, 0, 0)
+					print "P: " + str(self.P)
+					print "D: " + str(self.D)
+				# if pressed enter, then quit
+				if line == "":
+					break
 
 			self.torque_pub.publish(self.torque_to_JointTorqueMsg()) 
 			r.sleep()
@@ -274,10 +298,10 @@ class PIDTorqueJaco(object):
 		# save running list of joint torques
 		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
 
-		print "torque_curr: " + str(torque_curr)
+		#print "torque_curr: " + str(torque_curr)
 		for i in range(7):
 			if np.fabs(torque_curr[i][0]) > 7:
-				print "I HAVE SET THE INTERACTION"
+				#print "I HAVE SET THE INTERACTION"
 				self.interaction = True
 				break
 			#else: 
@@ -297,12 +321,12 @@ class PIDTorqueJaco(object):
 			dot_tau_cmd = np.dot(torque_curr.T, cmd_tau)[0][0] #/(norm_tau*norm_cmd)
 			force_theta = np.arccos(dot_tau_cmd/(norm_tau*norm_cmd))*np.sign(dot_tau_cmd)
 			force_mag = dot_tau_cmd
-
+		"""
 		print "norm_tau: " + str(norm_tau)
 		print "norm_cmd: " + str(norm_cmd)
 		print "force_theta: " + str(force_theta)
 		print "force_mag: " + str(force_mag)
-
+		"""
 		# if there is an interaction force
 		if self.interaction and np.abs(force_mag) >= interaction_thresh:
 			if np.sign(force_theta) < 0:
@@ -350,17 +374,20 @@ class PIDTorqueJaco(object):
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
-		self.update_target_pos(curr_pos)
+		self.update_target_holdPos(curr_pos)
+		#self.update_target_pos(curr_pos)
 
 		# update torque from PID based on current position
 		self.torque = self.PID_control(curr_pos)
 
 		# check if each angular torque is within set limits
+		"""
 		for i in range(7):
 			if self.torque[i][i] > self.max_torque[i][i]:
 				self.torque[i][i] = self.max_torque[i][i]
 			if self.torque[i][i] < -self.max_torque[i][i]:
 				self.torque[i][i] = -self.max_torque[i][i]
+		"""
 
 		# update plotter with new error measurement, torque command, and path time
 		curr_time = time.time() - self.process_start_T
@@ -375,9 +402,15 @@ class PIDTorqueJaco(object):
 
 		#print "target_pos: " + str(self.target_pos)
 		#print "curr_pos: " + str(curr_pos)
-		print "dist to target: " + str(self.target_pos - curr_pos)
+		#print "dist to target: " + str(self.target_pos - curr_pos)
 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
+
+	def update_target_holdPos(self, curr_pos):
+		"""
+		JUST A TEST
+		"""
+		self.target_pos = self.goal_pos	
 
 	def update_target_pos(self, curr_pos):
 		"""
