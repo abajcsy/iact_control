@@ -44,7 +44,9 @@ waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
 waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
 #waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 
-waypt3 = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
+#waypt3 = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
+waypt3 = [142.73, 126.039,144.323,98.214,269.2089,253.119,287.665]
+
 
 traj = [waypt1, waypt2, waypt3]
 
@@ -77,7 +79,7 @@ class PIDTorqueJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, sim_flag):
+	def __init__(self, sim_flag):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -147,27 +149,18 @@ class PIDTorqueJaco(object):
 		# stores current joint MEASURED joint torques
 		self.joint_torques = np.zeros((7,1))
 
-		print "PID Gains: " + str(p_gain) + ", " + str(i_gain) + "," + str(d_gain)
-
-		self.p_gain = p_gain
-		self.i_gain = i_gain
-		self.d_gain = d_gain
-
 		# P, I, D gains 
-		#P = self.p_gain*np.eye(7)
-		#I = self.i_gain*np.eye(7)
-		#D = self.d_gain*np.eye(7)
 		self.P = np.array([[40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 30.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 40.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 60.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 50.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0]])
-		self.I = self.i_gain*np.eye(7)
-		self.D = np.array([[7.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 7.5, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0]])
+		self.I = 0.0*np.eye(7)
+		self.D = np.array([[10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 7.5, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],
@@ -176,7 +169,7 @@ class PIDTorqueJaco(object):
 		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
 		# stuff for plotting
-		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
+		self.plotter = plot.Plotter(50.0,0.0,10.0)
 
 		# keeps running time since beginning of program execution
 		self.process_start_T = time.time() 
@@ -374,8 +367,8 @@ class PIDTorqueJaco(object):
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
-		self.update_target_holdPos(curr_pos)
-		#self.update_target_pos(curr_pos)
+		#self.update_target_holdPos(curr_pos)
+		self.update_target_pos(curr_pos)
 
 		# update torque from PID based on current position
 		self.torque = self.PID_control(curr_pos)
@@ -457,7 +450,7 @@ class PIDTorqueJaco(object):
 		# check if the arm reached the goal, and restart path
 		if not self.reached_goal:
 			dist_from_goal = np.fabs(curr_pos - self.goal_pos)
-
+			print "d to goal: " + str(dist_from_goal)
 			# check if every joint is close enough to goal configuration
 			close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]
 			
@@ -497,13 +490,13 @@ class PIDTorqueJaco(object):
 			self.reached_goal = False
 
 if __name__ == '__main__':
-	if len(sys.argv) < 5:
+	if len(sys.argv) < 2:
 		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, sim_flag."
 	else:	
-		p_gains = float(sys.argv[1])
-		i_gains = float(sys.argv[2])
-		d_gains = float(sys.argv[3])
-		sim_flag = int(sys.argv[4])
+		#p_gains = float(sys.argv[1])
+		#i_gains = float(sys.argv[2])
+		#d_gains = float(sys.argv[3])
+		sim_flag = int(sys.argv[1])
 
-		PIDTorqueJaco(p_gains,i_gains,d_gains,sim_flag)
+		PIDTorqueJaco(sim_flag)
 	

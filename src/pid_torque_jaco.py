@@ -154,22 +154,22 @@ class PIDTorqueJaco(object):
 		#P = self.p_gain*np.eye(7)
 		#I = self.i_gain*np.eye(7)
 		#D = self.d_gain*np.eye(7)
-		P = np.array([[15.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 15.5, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0],
+		self.P = np.array([[40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 30.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 40.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 50.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0]])
-		I = self.i_gain*np.eye(7)
-		D = np.array([[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 5.5, 0.0, 0.0, 0.0],
+		self.I = self.i_gain*np.eye(7)
+		self.D = np.array([[10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 7.5, 0.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0],
+					 [0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0],
 					 [0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0]])
-		self.controller = pid.PID(P,I,D,0,0)
+					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
+		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
@@ -183,7 +183,7 @@ class PIDTorqueJaco(object):
 		#TODO Torque control doesn't work unless you are running at 1000Hz at least (but not sure if works)
 		#TODO Noticed weird behavior where torque control dies silently (motors lock up and dont move)
 		#	  if the Hz rate is > 100. :( Need to debug
-		r = rospy.Rate(200) 
+		r = rospy.Rate(100) 
 
 		print "----------------------------------"
 		print "Moving robot, press ENTER to quit:"
