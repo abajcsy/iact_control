@@ -1,24 +1,23 @@
 import numpy as np
 from numpy import linalg
-import math
-from sympy import symbols
 from numpy import linspace
-from sympy import lambdify
 import matplotlib.pyplot as plt
 import time
+import math
 
-import openravepy
+from sympy import symbols
+from sympy import lambdify
+
 import trajoptpy
 import or_trajopt
+import openravepy
+from openravepy import *
 
 import interactpy
-from openravepy import *
-from interactpy import initialize
-from interactpy import demo
-from interactpy import interact 
+from interactpy import *
+from util import *
 
 import logging
-
 import pid
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
@@ -46,6 +45,8 @@ class Planner(object):
 		self.g = goal
 		self.totalT = T
 
+		print "totalT: " + str(self.totalT)
+
 		# initialize openrave and compute waypts
 		#model_filename = 'jaco_original'
 		self.env, self.robot = interact.initialize_empty()
@@ -61,8 +62,6 @@ class Planner(object):
 
 		print "Waypoint times T:" + str(self.wayptsT) 
 
-		#time.sleep(20)
-
 	def execute_path_sim(self):
 		"""
 		Executes in simulation the planned trajectory
@@ -76,11 +75,13 @@ class Planner(object):
 		self.s = newStart
 		self.totalT = T
 
+		print "in replan...totalT: " + str(self.totalT)
 		self.robot.SetDOFValues(self.s)
 		orig_ee = self.robot.arm.hand.GetTransform()
 		
 		self.waypts = self.robot.arm.PlanToConfiguration(self.g)
 		self.num_waypts = self.waypts.GetNumWaypoints()
+		print "in replan...num_waypts: " + str(self.num_waypts)
 		for i in range(self.num_waypts):
 			print self.waypts.GetWaypoint(i)
 
@@ -89,13 +90,15 @@ class Planner(object):
 		T_sum = 0.0
 		for i in range(self.num_waypts):
 			self.wayptsT[i] = T_sum
-			T_sum += self.totalT/self.num_waypts
+			print "in replan...T_sum: " + str(T_sum)
+			T_sum += self.totalT/(self.num_waypts-1)
 
 	def interpolate(self, t):
 		"""
 		Gets the next desired position along trajectory
 		by interpolating between waypoints given the current t.
 		"""
+		target_pos = self.waypts.GetWaypoint(0)
 		# TODO CHECK CORNER CASES START/END	
 		if self.num_waypts >= 2:
 			for i in range(self.num_waypts-1):
@@ -108,43 +111,52 @@ class Planner(object):
 					Tnext = self.wayptsT[i+1]
 					deltaT = Tnext - Tprev
 					theta = (next - prev)*(1/deltaT)*t + prev
-					return theta
+					target_pos = theta
 				# if exactly at a waypoint, return that waypoint
 				elif t == self.wayptsT[i]:
-					return self.waypts.GetWaypoint(i)			
+					target_pos = self.waypts.GetWaypoint(i)			
 		else:
 			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
-			return self.GetWaypoint(0)
+	
+		target_pos = np.array(target_pos).reshape((7,1))
+		return target_pos
 
-	def LFPB(self, t):
+	def sampleWaypoints(self, traj):
 		"""
-		Returns time-dependant configuratrion for straight line trajectory. 
-		- Method: 	Linear function with parabolic blend (LFPB)
+		Samples waypoints every 0.5 seconds along the trajectory
+		Parameters
+		----------
+		traj : OpenRAVE trajectory
+		Returns
+		-------
+		2D-array of DOFs
 		"""
-		v = 2*(self.g-self.s)/self.t_f				# max velocity	
-		t_b = (self.s-self.g+v*self.t_f)/v 			# blending time
 
-		a = self.s
-		b = 0.0
-		c = v/(2*t_b)
-		d = (self.s+self.g-v*self.t_f)/2.0
-		e = self.g
-		f = 0.0
-		g = (v*self.t_f+self.s-self.g+2.0*t_b*(-v))/(2.0*t_b**2)
+		if traj.GetDuration() == 0:
+			planningutils.RetimeTrajectory(traj)
+		duration = traj.GetDuration()
+		dofs = traj.SamplePoints2D(np.append(np.arange(0, duration, 0.5), duration))
+		#print "duration: " + str(duration)
 
-		theta = np.array([0.0]*7).reshape((7,1))
-		
-		for i in range(7):
-			if t >= 0.0 and t < t_b[i][0]:
-				theta[i][0] = a[i][0]+t*b+(t**2)*c[i][0]
-			elif t >= t_b[i][0] and t < self.t_f-t_b[i][0]:
-				theta[i][0] = d[i][0] + v[i][0]*t
-			elif t >= self.t_f-t_b[i][0] and t <= self.t_f:
-				theta[i][0] = e[i][0]+(t-self.t_f)*f+((t-self.t_f)**2)*g[i][0]
-			else: # if t > self.T
-				theta[i][0] = self.g[i][0]
-		
-		return theta
+		# for some reason, rrt creates dofs of dimension 15????
+		dofs = dofs[:, :7]
+
+		#self.samples[traj] = dofs
+
+		return dofs	
+
+	def plotTraj(self):
+		waypoints = self.sampleWaypoints(self.waypts)
+		self.plotWaypoints(self.env, self.robot, waypoints)
+
+	def plotWaypoints(self, env, robot, waypoints):
+		bodies = []
+		for waypoint in waypoints:
+			dof = np.append(waypoint, np.array([1, 1, 1]))
+			coord = transformToCartesian(dofToTransform(robot, dof))
+			plotPoint(env, bodies, coord)
+
+		return bodies
 
 if __name__ == '__main__':
 	
@@ -159,43 +171,21 @@ if __name__ == '__main__':
 	home_pos = home
 	goal_pos = goal
 
-	padding = np.array([0,0,0])
-	home_pos = np.append(home_pos, padding, 1)
-
 	s = np.array(home_pos)*(math.pi/180.0)
 	g = np.array(goal_pos)*(math.pi/180.0)
+
+	s = np.array([-1, 2, 0, 2, 0, 4, 0])
+	g = np.array([0,  2.9 ,  0.0 ,  2.1 ,  0. ,  4. ,  0.])
 
 	print s
 	print g
 
 	T = 2.0
 	trajplanner = Planner(s,g,T)
-	
-	P = np.array([[50.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 50.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0]])
-	I = 0.0*np.eye(7)
-	D = np.array([[20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 20.0, 0.0, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 0.0],
-			 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]])
-	controller = pid.PID(P,I,D,0,0)
-
+	trajplanner.plotTraj()
 	t = 0.8
 	theta = trajplanner.interpolate(t)
-	print "theta: " + str(theta)
-	p_error = (goal - theta).reshape((7,1))*(math.pi/180.0)
-	print "perror: " + str(p_error)
-	tau = controller.update_PID(p_error)
-	print "tau: " + str(tau)
-
+	
 
 	trajplanner.execute_path_sim()
 

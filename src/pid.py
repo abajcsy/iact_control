@@ -182,6 +182,7 @@ class PID(object):
         return result
         
     def update_PID(self, p_error, dt=None):
+
         """  Update the Pid loop with nonuniform time step size.
 
         Parameters:
@@ -190,6 +191,7 @@ class PID(object):
                    If dt is None, then the system clock will be used to 
                    calculate the time since the last update. 
         """
+
         if dt == None:
             cur_time = time.time()
             if self._last_time is None:
@@ -199,7 +201,7 @@ class PID(object):
 
         #print "in update_PID(): dt: " + str(dt)
 
-        self._p_error = p_error 
+        self._p_error = p_error
         if dt == 0 or math.isnan(dt) or math.isinf(dt):
             return np.zeros((7,7)) # TODO or shold it be 0.0??
 
