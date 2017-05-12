@@ -39,6 +39,9 @@ class Planner(object):
 		# NOTE: assume that start and goal are in radians
 
 		# TODO: will have to convert convert from 7x1 np matrix to 1x10 np matrix 
+		# need to add padding to start
+		padding = np.array([0,0,0])
+		start = np.append(start, padding, 1)
 		self.s = start
 		self.g = goal
 		self.totalT = T
@@ -184,13 +187,15 @@ if __name__ == '__main__':
 			 [0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 0.0],
 			 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]])
 	controller = pid.PID(P,I,D,0,0)
-	p_error = (home - goal).reshape((7,1))*(math.pi/180.0)
-	print "perror: " + str(p_error)
-	tau = controller.update_PID(p_error)
-	print "tau: " + str(tau)
 
 	t = 0.8
 	theta = trajplanner.interpolate(t)
 	print "theta: " + str(theta)
-	#trajplanner.execute_path_sim()
+	p_error = (goal - theta).reshape((7,1))*(math.pi/180.0)
+	print "perror: " + str(p_error)
+	tau = controller.update_PID(p_error)
+	print "tau: " + str(tau)
+
+
+	trajplanner.execute_path_sim()
 
