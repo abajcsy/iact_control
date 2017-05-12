@@ -15,8 +15,11 @@ import interactpy
 from openravepy import *
 from interactpy import initialize
 from interactpy import demo
+from interactpy import interact 
 
 import logging
+
+import pid
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
@@ -42,36 +45,73 @@ class Planner(object):
 
 		# initialize openrave and compute waypts
 		#model_filename = 'jaco_original'
-		env, robot = initialize()
+		self.env, self.robot = interact.initialize_empty()
 
-		viewer = env.GetViewer()
+		viewer = self.env.GetViewer()
 		viewer.SetCamera([[ 0.94684722, -0.12076704,  0.29815376,  0.21004671],
 		   [-0.3208323 , -0.42191214,  0.84797216, -1.40675116],
 		   [ 0.0233876 , -0.89855744, -0.43823231,  1.04685986],
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
 
-		
-		# set the starting DOFs
-		robot.SetDOFValues(self.s)
-		orig_ee = robot.arm.hand.GetTransform()
-		print "g: " + str(self.g)
-		
-		waypts = robot.arm.PlanToConfiguration(self.g)
-		num_waypts = waypts.GetNumWaypoints()
-		for i in range(num_waypts):
-			print waypts.GetWaypoint(i)
-
-		# compute time, T_i for each of the waypoints i in {1,...n}
-		self.wayptsT = [None]*num_waypts
-		T_sum = 0.0
-		for i in range(num_waypts):
-			self.wayptsT[i] = T_sum
-			T_sum += self.totalT/num_waypts
+		# plan trajectory from self.s to self.g with self.totalT time
+		self.replan(self.s, self.totalT)
 
 		print "Waypoint times T:" + str(self.wayptsT) 
 
-		robot.ExecutePath(waypts)
 		#time.sleep(20)
+
+	def execute_path_sim(self):
+		"""
+		Executes in simulation the planned trajectory
+		"""
+		self.robot.ExecutePath(self.waypts)
+
+	def replan(self, newStart, T):
+		"""
+		Computes a plan from newStart to self.g taking T time.
+		"""
+		self.s = newStart
+		self.totalT = T
+
+		self.robot.SetDOFValues(self.s)
+		orig_ee = self.robot.arm.hand.GetTransform()
+		
+		self.waypts = self.robot.arm.PlanToConfiguration(self.g)
+		self.num_waypts = self.waypts.GetNumWaypoints()
+		for i in range(self.num_waypts):
+			print self.waypts.GetWaypoint(i)
+
+		# compute time, T_i for each of the waypoints i in {1,...n}
+		self.wayptsT = [None]*self.num_waypts
+		T_sum = 0.0
+		for i in range(self.num_waypts):
+			self.wayptsT[i] = T_sum
+			T_sum += self.totalT/self.num_waypts
+
+	def interpolate(self, t):
+		"""
+		Gets the next desired position along trajectory
+		by interpolating between waypoints given the current t.
+		"""
+		# TODO CHECK CORNER CASES START/END	
+		if self.num_waypts >= 2:
+			for i in range(self.num_waypts-1):
+				# if between two waypoints, interpolate
+				if t > self.wayptsT[i] and t < self.wayptsT[i+1]:
+					# linearly interpolate between waypts
+					prev = self.waypts.GetWaypoint(i)
+					next = self.waypts.GetWaypoint(i+1)
+					Tprev = self.wayptsT[i]
+					Tnext = self.wayptsT[i+1]
+					deltaT = Tnext - Tprev
+					theta = (next - prev)*(1/deltaT)*t + prev
+					return theta
+				# if exactly at a waypoint, return that waypoint
+				elif t == self.wayptsT[i]:
+					return self.waypts.GetWaypoint(i)			
+		else:
+			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
+			return self.GetWaypoint(0)
 
 	def LFPB(self, t):
 		"""
@@ -101,33 +141,56 @@ class Planner(object):
 			else: # if t > self.T
 				theta[i][0] = self.g[i][0]
 		
-		return (self.t_f, theta)
+		return theta
 
 if __name__ == '__main__':
 	
-	
-	home_pos = np.array([103.366,197.13,180.070,43.4309,265.11,257.271,287.9276])
-	goal_pos = np.array([338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655])
+	home = np.array([103.366,197.13,180.070,43.4309,265.11,257.271,287.9276])
+	goal = np.array([338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655])
 	candlestick = np.array([180.0]*7)	
-
+	
 	waypt1 = np.array([136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861])
 	waypt2 = np.array([271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644])
 	waypt3 = np.array([338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655])
 
-	home_pos = waypt1
-	goal_pos = waypt3
+	home_pos = home
+	goal_pos = goal
 
 	padding = np.array([0,0,0])
 	home_pos = np.append(home_pos, padding, 1)
 
-	#goal_pos = np.append(goal_pos, padding, 1)
-
-	print home_pos
-	print goal_pos
 	s = np.array(home_pos)*(math.pi/180.0)
 	g = np.array(goal_pos)*(math.pi/180.0)
+
 	print s
 	print g
+
 	T = 2.0
 	trajplanner = Planner(s,g,T)
+	
+	P = np.array([[50.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 50.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0]])
+	I = 0.0*np.eye(7)
+	D = np.array([[20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 20.0, 0.0, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 0.0],
+			 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]])
+	controller = pid.PID(P,I,D,0,0)
+	p_error = (home - goal).reshape((7,1))*(math.pi/180.0)
+	print "perror: " + str(p_error)
+	tau = controller.update_PID(p_error)
+	print "tau: " + str(tau)
+
+	t = 0.8
+	theta = trajplanner.interpolate(t)
+	print "theta: " + str(theta)
+	#trajplanner.execute_path_sim()
 
