@@ -88,9 +88,12 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# get trajectory planner
-		T = 2.5
-		start = np.array(candlestick_pos)*(math.pi/180.0)
-		goal = np.array(home_pos)*(math.pi/180.0)
+		T = 6
+
+		p1 = pos1 #candlestick_pos
+		p2 = pos2 #home_pos
+		start = np.array(p1)*(math.pi/180.0)
+		goal = np.array(p2)*(math.pi/180.0)
 		self.planner = trajopt_planner.Planner(start, goal, T)
 
 		# save intermediate target position from degrees (default) to radians 
@@ -319,11 +322,9 @@ class PIDVelJaco(object):
 		else:
 			print "REACHED START --> EXECUTING PATH"
 
-			self.path_start_T = time.time()
 			t = time.time() - self.path_start_T
-			deltaT = 1.0
 			# get next target position from position along trajectory
-			self.target_pos = self.planner.interpolate(t+deltaT)
+			self.target_pos = self.planner.interpolate(t)
 			print "t: " + str(t)
 			print "new target pos from planner: " + str(self.target_pos)
 		# check if the arm reached the goal, and restart path
@@ -332,7 +333,7 @@ class PIDVelJaco(object):
 			
 			dist_from_goal = -((curr_pos - self.goal_pos + math.pi)%(2*math.pi) - math.pi)			
 			dist_from_goal = np.fabs(dist_from_goal)
-			print "dist from goal: " + str(dist_from_goal)
+			##print "dist from goal: " + str(dist_from_goal)
 
 			# check if every joint is close enough to goal configuration
 			close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]

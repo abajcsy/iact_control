@@ -118,6 +118,10 @@ class Planner(object):
 		else:
 			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
 	
+		# if times up, just go to goal
+		if t > self.totalT:
+			print "TIME IS UP. GOING TO FINAL WAYPOINT."
+			target_pos = self.waypts.GetWaypoint(self.num_waypts-1)	
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
