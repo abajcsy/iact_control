@@ -62,12 +62,6 @@ class Planner(object):
 
 		print "Waypoint times T:" + str(self.wayptsT) 
 
-	def execute_path_sim(self):
-		"""
-		Executes in simulation the planned trajectory
-		"""
-		self.robot.ExecutePath(self.waypts)
-
 	def replan(self, newStart, T):
 		"""
 		Computes a plan from newStart to self.g taking T time.
@@ -92,6 +86,24 @@ class Planner(object):
 			self.wayptsT[i] = T_sum
 			print "in replan...T_sum: " + str(T_sum)
 			T_sum += self.totalT/(self.num_waypts-1)
+
+	def get_cartesian_waypts(self):
+		"""
+		Returns list of waypoints along trajectory in task-space
+		return type: Openrave Waypoint object
+		"""
+		cartesian = []
+		for i in range(self.num_waypts):
+			waypt = self.waypts.GetWaypoint(i)
+			print waypt
+			cartesian.append(transformToCartesian(dofToTransform(self.robot, waypt)))
+		return np.array(cartesian)
+
+	def execute_path_sim(self):
+		"""
+		Executes in simulation the planned trajectory
+		"""
+		self.robot.ExecutePath(self.waypts)
 
 	def interpolate(self, t):
 		"""
@@ -188,8 +200,8 @@ if __name__ == '__main__':
 	trajplanner = Planner(s,g,T)
 	trajplanner.plotTraj()
 	t = 0.8
-	theta = trajplanner.interpolate(t)
-	
-
+	#theta = trajplanner.interpolate(t)
+	cartesian = trajplanner.get_cartesian_waypts()
+	print "cartesian: " + str(cartesian)
 	trajplanner.execute_path_sim()
 

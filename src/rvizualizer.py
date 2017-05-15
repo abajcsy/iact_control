@@ -56,6 +56,9 @@ class RVizualizer(object):
 		self.marker_array.markers.append(marker)
 		self.counter += 1
 
+	def viz_waypts(self, waypts):
+		
+
 if __name__ == '__main__':
 	viz = RVizualizer()
 
