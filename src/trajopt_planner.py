@@ -60,11 +60,17 @@ class Planner(object):
 		# plan trajectory from self.s to self.g with self.totalT time
 		self.replan(self.s, self.totalT)
 
+		# store cartesian waypoints for plotting and debugging
+		self.cartesian_waypts = self.get_cartesian_waypts()
+
+		# bodies for visualization in RVIZ
+		self.bodies = []
+
 		print "Waypoint times T:" + str(self.wayptsT) 
 
 	def replan(self, newStart, T):
 		"""
-		Computes a plan from newStart to self.g taking T time.
+		Computes a plan from newStart to self.g taking T total time.
 		"""
 		self.s = newStart
 		self.totalT = T
@@ -90,14 +96,23 @@ class Planner(object):
 	def get_cartesian_waypts(self):
 		"""
 		Returns list of waypoints along trajectory in task-space
-		return type: Openrave Waypoint object
+		- Return type: list of length 3 numpy arrays
 		"""
+		#print "self.waypts: " + str(self.waypts)
+		waypoints = self.waypts.GetAllWaypoints2D()[:, :7]
+		#print "waypoints 2D: " + str(waypoints)
 		cartesian = []
-		for i in range(self.num_waypts):
-			waypt = self.waypts.GetWaypoint(i)
-			print waypt
-			cartesian.append(transformToCartesian(dofToTransform(self.robot, waypt)))
+		for waypoint in waypoints:
+			cartesian.append(transformToCartesian(dofToTransform(self.robot, waypoint)))
+		#print "cartesian: " + str(cartesian)
 		return np.array(cartesian)
+
+	def plot_cartesian_waypts(self, cartesian):
+		"""
+		Plots cartesian waypoints in OpenRAVE
+		"""
+		for i in range(len(cartesian)):
+			plotPoint(self.env, self.bodies, cartesian[i])
 
 	def execute_path_sim(self):
 		"""
@@ -137,43 +152,6 @@ class Planner(object):
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
-	def sampleWaypoints(self, traj):
-		"""
-		Samples waypoints every 0.5 seconds along the trajectory
-		Parameters
-		----------
-		traj : OpenRAVE trajectory
-		Returns
-		-------
-		2D-array of DOFs
-		"""
-
-		if traj.GetDuration() == 0:
-			planningutils.RetimeTrajectory(traj)
-		duration = traj.GetDuration()
-		dofs = traj.SamplePoints2D(np.append(np.arange(0, duration, 0.5), duration))
-		#print "duration: " + str(duration)
-
-		# for some reason, rrt creates dofs of dimension 15????
-		dofs = dofs[:, :7]
-
-		#self.samples[traj] = dofs
-
-		return dofs	
-
-	def plotTraj(self):
-		waypoints = self.sampleWaypoints(self.waypts)
-		self.plotWaypoints(self.env, self.robot, waypoints)
-
-	def plotWaypoints(self, env, robot, waypoints):
-		bodies = []
-		for waypoint in waypoints:
-			dof = np.append(waypoint, np.array([1, 1, 1]))
-			coord = transformToCartesian(dofToTransform(robot, dof))
-			plotPoint(env, bodies, coord)
-
-		return bodies
-
 if __name__ == '__main__':
 	
 	home = np.array([103.366,197.13,180.070,43.4309,265.11,257.271,287.9276])
@@ -198,10 +176,10 @@ if __name__ == '__main__':
 
 	T = 2.0
 	trajplanner = Planner(s,g,T)
-	trajplanner.plotTraj()
-	t = 0.8
+	#t = 0.8
 	#theta = trajplanner.interpolate(t)
 	cartesian = trajplanner.get_cartesian_waypts()
+	trajplanner.plot_cartesian_waypts(cartesian)
 	print "cartesian: " + str(cartesian)
 	trajplanner.execute_path_sim()
 

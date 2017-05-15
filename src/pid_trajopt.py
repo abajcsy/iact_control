@@ -79,7 +79,7 @@ class PIDVelJaco(object):
 		"""
 
 		# ---- ROS Setup ---- #
-		rospy.init_node("pid_vel_jaco")
+		rospy.init_node("pid_vel_trajopt")
 
 		# switch robot to torque-control mode if not in simulation
 		#if not sim_flag:
@@ -94,6 +94,8 @@ class PIDVelJaco(object):
 		p2 = pos2 #home_pos
 		start = np.array(p1)*(math.pi/180.0)
 		goal = np.array(p2)*(math.pi/180.0)
+
+		# create the trajopt planner from start to goal
 		self.planner = trajopt_planner.Planner(start, goal, T)
 
 		# save intermediate target position from degrees (default) to radians 
@@ -103,23 +105,21 @@ class PIDVelJaco(object):
 		# save final goal configuration
 		self.goal_pos = goal.reshape((7,1))
 
-		print "AT START: target_pos: " + str(self.target_pos)
-		print "AT START: start_pos: " + str(self.start_pos)
-		print "AT START: goal_pos: " + str(self.goal_pos)
-
-		# ------------------------- #
-
 		# track if you have gotten to start/goal of path
 		self.reached_start = False
 		self.reached_goal = False
 
-		print "REACHED START: " + str(self.reached_start)
+		print "HAS REACHED START? " + str(self.reached_start)
+
+		# ------------------------- #
 
 		self.max_cmd = 40*np.eye(7)
 		# stores current COMMANDED joint torques
 		self.cmd = np.eye(7) 
 		# stores current joint MEASURED joint torques
 		self.joint_torques = np.zeros((7,1))
+
+		# ----- Controller Setup ----- #
 
 		print "PID Gains: " + str(p_gain) + ", " + str(i_gain) + "," + str(d_gain)
 
@@ -131,24 +131,9 @@ class PIDVelJaco(object):
 		self.P = self.p_gain*np.eye(7)
 		self.I = self.i_gain*np.eye(7)
 		self.D = self.d_gain*np.eye(7)
-		""" 
-		self.P = np.array([[50.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 50.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0]])
-		self.I = self.i_gain*np.eye(7)
-		self.D = np.array([[20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 20.0, 0.0, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 50.5, 0.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 20.0, 0.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 0.0],
-					 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0]])
-		"""
 		self.controller = pid.PID(self.P,self.I,self.D,0,0)
+
+		# ---------------------------- #
 
 		# stuff for plotting
 		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
@@ -160,6 +145,8 @@ class PIDVelJaco(object):
 
 		# create joint-velocity publisher
 		self.vel_pub = rospy.Publisher(prefix + '/in/joint_velocity', kinova_msgs.msg.JointVelocity, queue_size=1)
+		# create publisher of the cartesian waypoints
+		self.waypt_pub = rospy.Publisher('/cartesian_waypts', geometry_msgs.msg.PoseArray, queue_size=1)
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
@@ -167,6 +154,7 @@ class PIDVelJaco(object):
 		rospy.Subscriber(prefix + '/out/joint_state', sensor_msgs.msg.JointState, self.joint_state_callback, queue_size=1)
 		# create subscriber to joint_torques
 		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
+
 
 		# publish to ROS at 1000hz
 		r = rospy.Rate(100) 
@@ -181,6 +169,7 @@ class PIDVelJaco(object):
 				break
 
 			self.vel_pub.publish(self.cmd_to_JointVelocityMsg()) 
+			self.waypt_pub.publish(self.waypts_to_PoseArrayMsg())
 			r.sleep()
 
 		# plot the error over time after finished
@@ -219,6 +208,29 @@ class PIDVelJaco(object):
 		jointCmd.joint7 = self.cmd[6][6];
 
 		return jointCmd
+
+	def waypts_to_PoseArrayMsg(self):
+		"""
+		Returns a PoseArray msg from an array of 3D carteian waypoints
+		"""
+		poseArray = geometry_msgs.msg.PoseArray()
+		poseArray.header.stamp = rospy.Time.now()
+		poseArray.header.frame_id = "/root"
+
+		cart_waypts = self.planner.cartesian_waypts
+		for i in range(len(cart_waypts)):
+			somePose = geometry_msgs.msg.Pose()
+			somePose.position.x = cart_waypts[i][0]
+			somePose.position.y = cart_waypts[i][1]
+			somePose.position.z = cart_waypts[i][2]
+
+			somePose.orientation.x = 0.0
+			somePose.orientation.y = 0.0
+			somePose.orientation.z = 0.0
+			somePose.orientation.w = 1.0
+			poseArray.poses.append(somePose)
+
+		return poseArray
 
 	def PID_control(self, pos):
 		"""
