@@ -45,6 +45,8 @@ waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
 waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
 waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 
+traj = [np.array(waypt1), np.array(waypt2), np.array(waypt3)]
+
 epsilon = 0.10
 interaction_thresh = 5.0
 
@@ -89,10 +91,11 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# get trajectory planner
-		T = 6
+		T = 8.0
 
 		p1 = home_pos #pos1 #candlestick_pos
 		p2 = candlestick_pos #pos2 #home_pos
+
 		start = np.array(p1)*(math.pi/180.0)
 		goal = np.array(p2)*(math.pi/180.0)
 
@@ -110,7 +113,7 @@ class PIDVelJaco(object):
 		self.reached_start = False
 		self.reached_goal = False
 
-		print "HAS REACHED START? " + str(self.reached_start)
+		#print "HAS REACHED START? " + str(self.reached_start)
 
 		# ------------------------- #
 
@@ -170,7 +173,7 @@ class PIDVelJaco(object):
 				break
 
 			self.vel_pub.publish(self.cmd_to_JointVelocityMsg()) 
-			self.waypt_pub.publish(self.waypts_to_PoseArrayMsg())
+			#self.waypt_pub.publish(self.waypts_to_PoseArrayMsg())
 			r.sleep()
 
 		# plot the error over time after finished
@@ -218,7 +221,8 @@ class PIDVelJaco(object):
 		poseArray.header.stamp = rospy.Time.now()
 		poseArray.header.frame_id = "/root"
 
-		cart_waypts = self.planner.cartesian_waypts
+		#cart_waypts = self.planner.cartesian_waypts
+		cart_waypts = self.planner.sampled_cartesian_waypts
 		for i in range(len(cart_waypts)):
 			somePose = geometry_msgs.msg.Pose()
 			somePose.position.x = cart_waypts[i][0]
@@ -261,7 +265,6 @@ class PIDVelJaco(object):
 		Reads the joint state in radians
 		"""
 		curr_pos = msg.position
-		print "curr pos (rad): " + str(curr_pos)
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -296,12 +299,12 @@ class PIDVelJaco(object):
 		curr_time = time.time() - self.process_start_T
 		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
 
-		print "target_pos: " + str(self.target_pos)
-		print "curr_pos: " + str(curr_pos)
+		#print "target_pos: " + str(self.target_pos)
+		#print "curr_pos: " + str(curr_pos)
 		#print "cmd: " + str(self.cmd)
 		#dist_to_target = -((self.target_pos - curr_pos + math.pi)%(2*math.pi) - math.pi)
 		dist_to_target = -((self.target_pos - curr_pos + math.pi)%(2*math.pi) - math.pi)
-		print "dist to target: " + str(dist_to_target)
+		#print "dist to target: " + str(dist_to_target)
 
 		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
 
@@ -317,7 +320,7 @@ class PIDVelJaco(object):
 			#dist_from_start = np.fabs(curr_pos - self.start_pos)
 			dist_from_start = -((curr_pos - self.start_pos + math.pi)%(2*math.pi) - math.pi)			
 			dist_from_start = np.fabs(dist_from_start)
-			print "dist from start: " + str(dist_from_start)
+			#print "dist from start: " + str(dist_from_start)
 
 			# check if every joint is close enough to start configuration
 			close_to_start = [dist_from_start[i] < epsilon for i in range(7)]
@@ -339,10 +342,11 @@ class PIDVelJaco(object):
 			print "REACHED START --> EXECUTING PATH"
 
 			t = time.time() - self.path_start_T
+			print "t: " + str(t)
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)
-			print "t: " + str(t)
-			print "new target pos from planner: " + str(self.target_pos)
+
+			#print "new target pos from planner: " + str(self.target_pos)
 		# check if the arm reached the goal, and restart path
 		if not self.reached_goal:
 			#dist_from_goal = np.fabs(curr_pos - self.goal_pos)

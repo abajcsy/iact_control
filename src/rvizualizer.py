@@ -46,6 +46,7 @@ class RVizualizer(object):
 
 	def viz_trajectory(self, msg):
 		#print self.counter
+		print "traj (" + str(msg.X) + "," + str(msg.Y ) + "," + str(msg.Z) + ")"
 		marker = Marker()
 		marker.id = self.counter
 		marker.header.frame_id = "/root"
@@ -71,6 +72,7 @@ class RVizualizer(object):
 	def viz_waypts(self, msg):
 		for i in range(len(msg.poses)):
 			pt = msg.poses[i].position
+			print "waypts (" + str(pt.x/10.0) + "," + str(pt.y/10.0) + "," + str(pt.z/10.0) + ")"
 			marker = Marker()
 			marker.id = self.waypt_counter
 			marker.header.frame_id = "/root"
@@ -86,9 +88,9 @@ class RVizualizer(object):
 			marker.color.g = 0.0
 			marker.color.b = 1.0
 			marker.pose.orientation.w = 1.0
-			marker.pose.position.x = pt.x
-			marker.pose.position.y = pt.y
-			marker.pose.position.z = pt.z
+			marker.pose.position.x = pt.x/10.0
+			marker.pose.position.y = pt.y/10.0
+			marker.pose.position.z = pt.z/10.0
 
 			self.waypt_marker_array.markers.append(marker)
 			self.waypt_counter += 1
