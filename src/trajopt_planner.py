@@ -20,6 +20,8 @@ from util import *
 import logging
 import pid
 
+import sim_robot
+
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
 class Planner(object):
@@ -44,29 +46,41 @@ class Planner(object):
 		self.s = start
 		self.g = goal
 		self.totalT = T
+		self.curr_pos = self.s
 
 		print "totalT: " + str(self.totalT)
 
 		# initialize openrave and compute waypts
-		#model_filename = 'jaco_original'
-		self.env, self.robot = interact.initialize_empty()
+		model_filename = 'jaco_dynamics'
+		self.env, self.robot = interact.initialize_empty(model_filename)
+		physics = RaveCreatePhysicsEngine(self.env,'ode')
+		self.env.SetPhysicsEngine(physics)
+
+		#self.robot.SetTransform(np.array([[1,0,0,0],
+        #                         		 [0,0,0,0],
+        #                         		 [0,0,0,0],
+        #                         		 [0,0,0,1]]))
 
 		viewer = self.env.GetViewer()
+
+		viewer.SetSize(1000,1000)
 		viewer.SetCamera([[ 0.94684722, -0.12076704,  0.29815376,  0.21004671],
 		   [-0.3208323 , -0.42191214,  0.84797216, -1.40675116],
 		   [ 0.0233876 , -0.89855744, -0.43823231,  1.04685986],
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
+		viewer.SetBkgndColor([0.8,0.8,0.8])
 
 		# plan trajectory from self.s to self.g with self.totalT time
 		self.replan(self.s, self.totalT)
-
-		# store cartesian waypoints for plotting and debugging
-		self.cartesian_waypts = self.get_cartesian_waypts()
+		print "Waypoint times T:" + str(self.wayptsT) 
 
 		# bodies for visualization in RVIZ
 		self.bodies = []
 
-		print "Waypoint times T:" + str(self.wayptsT) 
+		# store cartesian waypoints for plotting and debugging
+		self.cartesian_waypts = self.get_cartesian_waypts()
+		self.plot_cartesian_waypts(self.cartesian_waypts)
+
 
 	def replan(self, newStart, T):
 		"""
@@ -81,6 +95,12 @@ class Planner(object):
 		
 		self.waypts = self.robot.arm.PlanToConfiguration(self.g)
 		self.num_waypts = self.waypts.GetNumWaypoints()
+
+		print "selfs: " + str(self.s[:7])
+		print "selfg: " + str(self.g)
+		if np.array_equal(self.s[:7], self.g):
+			print "START AND GOAL ARE THE SAME. Just holding position."
+
 		print "in replan...num_waypts: " + str(self.num_waypts)
 		for i in range(self.num_waypts):
 			print self.waypts.GetWaypoint(i)
@@ -88,37 +108,57 @@ class Planner(object):
 		# compute time, T_i for each of the waypoints i in {1,...n}
 		self.wayptsT = [None]*self.num_waypts
 		T_sum = 0.0
-		for i in range(self.num_waypts):
-			self.wayptsT[i] = T_sum
-			print "in replan...T_sum: " + str(T_sum)
-			T_sum += self.totalT/(self.num_waypts-1)
+		if self.num_waypts >= 2:
+			for i in range(self.num_waypts):
+				self.wayptsT[i] = T_sum
+				print "in replan...T_sum: " + str(T_sum)
+				T_sum += self.totalT/(self.num_waypts-1)
+		else:
+			self.wayptsT[0] = self.totalT
 
 	def get_cartesian_waypts(self):
 		"""
 		Returns list of waypoints along trajectory in task-space
 		- Return type: list of length 3 numpy arrays
 		"""
-		#print "self.waypts: " + str(self.waypts)
-		waypoints = self.waypts.GetAllWaypoints2D()[:, :7]
-		#print "waypoints 2D: " + str(waypoints)
 		cartesian = []
-		for waypoint in waypoints:
-			cartesian.append(transformToCartesian(dofToTransform(self.robot, waypoint)))
-		#print "cartesian: " + str(cartesian)
+		for i in range(self.num_waypts):
+			waypoint = self.waypts.GetWaypoint(i)
+			dof = np.append(waypoint, np.array([1,1,1]))
+			tf = transformToCartesian(dofToTransform(self.robot, dof))
+			cartesian.append(tf)
+		print "cartesian: " + str(cartesian)
 		return np.array(cartesian)
 
 	def plot_cartesian_waypts(self, cartesian):
 		"""
 		Plots cartesian waypoints in OpenRAVE
 		"""
-		for i in range(len(cartesian)):
+		for i in range(self.num_waypts):
 			plotPoint(self.env, self.bodies, cartesian[i])
+
+	def get_robot(self):
+		"""
+		Returns robot model
+		"""
+		return self.robot
 
 	def execute_path_sim(self):
 		"""
 		Executes in simulation the planned trajectory
 		"""
 		self.robot.ExecutePath(self.waypts)
+
+	def update_curr_pos(self, curr_pos):
+		"""
+		Updates DOF values based on curr_pos
+		"""
+		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0],curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
+		self.curr_pos = pos
+
+		print "setting robot's pos to: " + str(self.curr_pos)
+
+		self.robot.SetDOFValues(self.curr_pos)
 
 	def interpolate(self, t):
 		"""
@@ -166,10 +206,10 @@ if __name__ == '__main__':
 	goal_pos = goal
 
 	s = np.array(home_pos)*(math.pi/180.0)
-	g = np.array(goal_pos)*(math.pi/180.0)
+	g = np.array(candlestick)*(math.pi/180.0)
 
-	s = np.array([-1, 2, 0, 2, 0, 4, 0])
-	g = np.array([0,  2.9 ,  0.0 ,  2.1 ,  0. ,  4. ,  0.])
+	#s = np.array([-1, 2, 0, 2, 0, 4, 0])
+	#g = np.array([0,  2.9 ,  0.0 ,  2.1 ,  0. ,  4. ,  0.])
 
 	print s
 	print g
@@ -178,8 +218,6 @@ if __name__ == '__main__':
 	trajplanner = Planner(s,g,T)
 	#t = 0.8
 	#theta = trajplanner.interpolate(t)
-	cartesian = trajplanner.get_cartesian_waypts()
-	trajplanner.plot_cartesian_waypts(cartesian)
-	print "cartesian: " + str(cartesian)
+	trajplanner.plot_cartesian_waypts(trajplanner.cartesian_waypts)
 	trajplanner.execute_path_sim()
-
+	time.sleep(10)

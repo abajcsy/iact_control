@@ -1,7 +1,7 @@
 <launch>
 
 	<!-- PID gains -->
-	<arg name="p_gain" default="100"/>
+	<arg name="p_gain" default="50"/>
 	<arg name="i_gain" default="0"/>
 	<arg name="d_gain" default="20"/>
 
@@ -10,7 +10,7 @@
 
 	<!-- velocity-based with trajopt planning PID -->
 	<node name="pid_trajopt" pkg="iact_control" type="pid_trajopt.py" args="$(arg p_gain) $(arg i_gain) $(arg d_gain) $(arg sim_flag)" output="screen"/>
-	
+
 	<!-- Visualization -->
 	<node name="rvizualizer" pkg="iact_control" type="rvizualizer.py"/> 
 

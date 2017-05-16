@@ -38,7 +38,6 @@ class RVizualizer(object):
 		# create subscriber to cartesian waypoints
 		rospy.Subscriber('/cartesian_waypts', geometry_msgs.msg.PoseArray, self.viz_waypts, queue_size=1)
 		
-
 		while not rospy.is_shutdown():
 			# Publish the MarkerArrays
 			self.marker_pub.publish(self.marker_array)

@@ -19,6 +19,7 @@ import actionlib
 import time
 import plot
 import trajopt_planner
+import sim_robot
 
 import kinova_msgs.msg
 import geometry_msgs.msg
@@ -90,8 +91,8 @@ class PIDVelJaco(object):
 		# get trajectory planner
 		T = 6
 
-		p1 = pos1 #candlestick_pos
-		p2 = pos2 #home_pos
+		p1 = home_pos #pos1 #candlestick_pos
+		p2 = candlestick_pos #pos2 #home_pos
 		start = np.array(p1)*(math.pi/180.0)
 		goal = np.array(p2)*(math.pi/180.0)
 
@@ -272,6 +273,9 @@ class PIDVelJaco(object):
 
 		# convert to radians
 		curr_pos = curr_pos*(math.pi/180.0)	
+
+		
+		self.planner.update_curr_pos(curr_pos)
 
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
