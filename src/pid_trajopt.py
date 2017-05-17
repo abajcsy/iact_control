@@ -91,7 +91,7 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# get trajectory planner
-		T = 15.0
+		T = 25.0
 
 		p1 = home_pos #pos1 #candlestick_pos
 		p2 = candlestick_pos #pos2 #home_pos
@@ -268,8 +268,8 @@ class PIDVelJaco(object):
 
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
-			print "---INTERACTION---"
-			#self.planner.deform(torque_curr)
+			print "--- INTERACTION ---"
+			self.planner.deform(torque_curr)
 
 		# update the plot of joint torques over time
 		#t = time.time() - self.process_start_T
@@ -292,7 +292,7 @@ class PIDVelJaco(object):
 		# convert to radians
 		curr_pos = curr_pos*(math.pi/180.0)	
 
-		
+		# update the OpenRAVE simulation 
 		self.planner.update_curr_pos(curr_pos)
 
 		# update target position to move to depending on:

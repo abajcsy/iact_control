@@ -85,38 +85,48 @@ class Planner(object):
 		self.plotTraj()
 
 		# ---- DEFORMATION Initialization ---- #
+		self.n = 5 # number of waypoints that will be deformed
 
 		# create A matrix
-		a = np.ones((1, self.num_traj_pts))[0]
-		b = np.ones((1, self.num_traj_pts-1))[0]
-		self.A = np.diag(a, 0) + np.diag(b, -1) + np.diag(b, 1)
-		np.fill_diagonal(self.A, -2)
+		self.A = np.zeros((self.n+2, self.n)) 
+		# fill diagonal with 1's
+		np.fill_diagonal(self.A, 1)
+		# populate off diagonal with -2 and twice off diag with 1
+		for i in range(self.n):
+			self.A[i+1][i] = -2
+			self.A[i+2][i] = 1
 
 		print "A: " + str(self.A)
 
 		# create R matrix, and R^-1 matrix
-		self.R = self.A.T*self.A
+		self.R = np.dot(self.A.T, self.A)
 		Rinv = np.linalg.inv(self.R)
 		print "R: " + str(self.R)
 
-		Uh = np.zeros((self.num_traj_pts, 1))
+		Uh = np.zeros((self.n, 1))
 		Uh[0] = 1
 
-		self.n = 5 # number of waypoints that will be deformed
-		self.H = Rinv*Uh*(np.sqrt(self.n)/np.linalg.norm(Rinv*Uh))
+		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
+		print "H: " + str(self.H)
 		# --------------------------------- #
 
 		# store cartesian waypoints for plotting and debugging
 		#self.cartesian_waypts = self.get_cartesian_waypts()
 		#self.plot_cartesian_waypts(self.cartesian_waypts)
 
-	def plotPoint(self, coords):
+	def plotPoint(self, coords, size=0.1):
+		"""
+		Plots a single cube point in OpenRAVE at coords(x,y,z) location
+		"""
 		with self.env:
+			color = np.array([0, 1, 0])
+
 			body = RaveCreateKinBody(self.env, '')
 			body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
-						  0.1, 0.1, 0.1]]))
+						  size, size, size]]))
 			body.SetName(str(len(self.bodies)))
 			self.env.Add(body, True)
+			body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 			self.bodies.append(body)
 
 	def plan(self, newStart, T):
@@ -161,7 +171,7 @@ class Planner(object):
 		if self.num_traj_pts >= 2:
 			for i in range(self.num_traj_pts):
 				self.wayptsT[i] = T_sum
-				print "In plan...T_sum: " + str(T_sum)
+				print "In pl98an...T_sum: " + str(T_sum)
 				T_sum += self.totalT/(self.num_traj_pts-1)
 		else:
 			self.wayptsT[0] = self.totalT
@@ -183,10 +193,10 @@ class Planner(object):
 
 	def plot_cartesian_waypts(self, cartesian):
 		"""
-		Plots cartesian waypoints in OpenRAVE
+		Plots cartesian waypoints in OpenRAVE.
 		"""
 		for i in range(self.num_waypts):
-			plotPoint(self.env, self.bodies, cartesian[i])
+			self.plotPoint(cartesian[i])
 
 	def get_robot(self):
 		"""
@@ -202,7 +212,10 @@ class Planner(object):
 
 	def update_curr_pos(self, curr_pos):
 		"""
-		Updates DOF values based on curr_pos
+		Updates DOF values in OpenRAVE simulation based on curr_pos.
+		----
+		curr_pos 	7x1 vector of current joint angles (degrees)
+		----
 		"""
 		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0],curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
 		self.curr_pos = pos
@@ -211,13 +224,53 @@ class Planner(object):
 
 	def deform(self, u_h):
 		"""
-		Deforms waypoints given human applied force, u_h, in c-space
+		Deforms waypoints given human applied force, u_h, in c-space.
+		----
+		u_h 	7x1 vector of applied torques
+		----
 		"""
+		print "IN deform(u_h): "
 
-		# get the current waypoint that human interacted with
-		curr_waypt = self.traj_pts[self.curr_waypt_idx]
+		#TODO ONLY WORKS FOR INTERACTION WITH ONE DOF
+		# grab the force applied to one dof
+		force_h = 0.0
+		dof = 0
+		for i in range(len(u_h)):
+			if u_h[i][0] != 0:
+				force_h = u_h[i][0]
+				dof = i
+
+		# TODO THIS IS TEMPORARY NEGATION TO GET CORRECT DIRECTION
+		force_h = -force_h
+
+		print "--force_h: " + str(force_h)
+		print "--dof: " + str(dof)
+
+		# arbitration parameter
+		mu = 0.005
+		print "--mu: " + str(mu)
+		# current waypoint idx
+		i = self.curr_waypt_idx
+		print "--i: " + str(i)
+
+		# sanity check - if there are less than n waypoints remaining in 
+		# entire trajectory, then just change as many as you can till end
+		if (self.curr_waypt_idx + self.n) > self.num_traj_pts:
+			print "Less than n=" + str(self.n) + " waypoints remaining!"
+			return
+
+		traj_prev = self.traj_pts
 		
-		# TODO COMPLETE THIS.
+		# get segment of n waypoints that we will deform
+		pts_to_change = traj_prev[i : self.n + i]
+		dof_to_change = pts_to_change[:,dof].reshape((self.n,1))
+
+		deformed_pts = dof_to_change + mu*np.dot(self.H, force_h)
+		traj_prev[i : self.n+i, dof] = deformed_pts.reshape(self.n)
+		self.traj_pts = traj_prev
+
+		# plot the trajectory
+		self.plotTraj()
 
 	def interpolate(self, t):
 		"""
@@ -235,13 +288,13 @@ class Planner(object):
 					# linearly interpolate between waypts
 					prev = self.traj_pts[i]
 					next = self.traj_pts[i+1]
-					Tprev = self.wayptsT[i]
-					Tnext = self.wayptsT[i+1]
-					deltaT = Tnext - Tprev
-					theta = (next - prev)*(1/deltaT)*t + prev
+					ti = self.wayptsT[i]
+					ti1 = self.wayptsT[i+1]
+					deltaT = ti1 - ti
+					theta = (next - prev)*((t-ti)/deltaT) + prev
 					target_pos = theta
-					# store index of current waypoint that robot is near
-					self.curr_waypt_idx = i
+					# store index of next waypoint that robot is near
+					self.curr_waypt_idx = i+1
 				# if exactly at a waypoint, return that waypoint
 				elif t == self.wayptsT[i]:
 					target_pos = self.traj_pts[i]		
@@ -256,6 +309,12 @@ class Planner(object):
 			target_pos = self.traj_pts[self.num_traj_pts-1]	
 			# store index of current waypoint that robot is near
 			self.curr_waypt_idx = self.num_traj_pts-1
+
+		# plot the target position in task-space
+		dof = np.append(target_pos, np.array([1, 1, 1]))
+		coord = transformToCartesian(dofToTransform(self.robot, dof))
+		self.plotPoint(coord, size=0.01)
+
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
@@ -326,6 +385,8 @@ class Planner(object):
 		"""
 		Plots the best trajectory found or planned
 		"""
+		for body in self.bodies:
+			self.env.Remove(body)
 
 		self.bodies += plotWaypoints(self.env, self.robot, self.traj_pts)
 
@@ -356,9 +417,11 @@ if __name__ == '__main__':
 
 	T = 8.0
 	trajplanner = Planner(s,g,T)
-	t = 0.8
+	u_h = np.array([0, 20, 0, 0, 0, 0, 0]).reshape((7,1))
+	trajplanner.deform(u_h)
+	t = 1.0
 	theta = trajplanner.interpolate(t)
-	print "theta: " + str(theta)
-	print trajplanner.traj.Sample(0.1)
-	trajplanner.execute_path_sim()
+	#print "theta: " + str(theta)
+	#print trajplanner.traj.Sample(0.1)
+	#trajplanner.execute_path_sim()
 	time.sleep(20)
