@@ -160,7 +160,7 @@ class PIDVelJaco(object):
 		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
 
 
-		# publish to ROS at 1000hz
+		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
 
 		print "----------------------------------"
