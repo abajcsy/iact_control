@@ -48,7 +48,7 @@ waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
 traj = [np.array(waypt1), np.array(waypt2), np.array(waypt3)]
 
 epsilon = 0.10
-interaction_thresh = 5.0
+interaction_thresh = 5.0 #this is never used in the file
 
 class PIDVelJaco(object): 
 	"""

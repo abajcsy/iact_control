@@ -19,6 +19,7 @@ from util import *
 
 import logging
 import pid
+import copy
 
 import sim_robot
 
@@ -238,29 +239,29 @@ class Planner(object):
 		u_h 	7x1 vector of applied torques
 		----
 		"""
-		print "IN deform(u_h): "
+		# print "IN deform(u_h): "
 
 		#TODO ONLY WORKS FOR INTERACTION WITH ONE DOF
 		# grab the force applied to one dof
-		force_h = 0.0
-		dof = 0
-		for i in range(len(u_h)):
-			if u_h[i][0] != 0:
-				force_h = u_h[i][0]
-				dof = i
+		#force_h = 0.0
+		#dof = 0
+		#for i in range(len(u_h)):
+		#	if u_h[i][0] != 0:
+		#		force_h = u_h[i][0]
+		#		dof = i
 
 		# TODO THIS IS TEMPORARY NEGATION TO GET CORRECT DIRECTION
-		force_h = -force_h
+		#force_h = -force_h
 
-		print "--force_h: " + str(force_h)
-		print "--dof: " + str(dof)
+		#print "--force_h: " + str(force_h)
+		#print "--dof: " + str(dof)
 
 		# arbitration parameter
-		mu = 0.005
-		print "--mu: " + str(mu)
+		mu = -0.005
+		#print "--mu: " + str(mu)
 		# current waypoint idx
 		i = self.curr_waypt_idx
-		print "--i: " + str(i)
+		#print "--i: " + str(i)
 
 		# sanity check - if there are less than n waypoints remaining in 
 		# entire trajectory, then just change as many as you can till end
@@ -269,13 +270,18 @@ class Planner(object):
 			return
 
 		traj_prev = self.traj_pts
-		
-		# get segment of n waypoints that we will deform
-		pts_to_change = traj_prev[i : self.n + i]
-		dof_to_change = pts_to_change[:,dof].reshape((self.n,1))
 
-		deformed_pts = dof_to_change + mu*np.dot(self.H, force_h)
-		traj_prev[i : self.n+i, dof] = deformed_pts.reshape(self.n)
+		gamma = np.zeros((self.n,7))
+		for ii in range(7):
+			gamma[:,ii] = mu*np.dot(self.H, u_h[ii])
+
+		traj_prev_tmp = copy.deepcopy(traj_prev)
+
+		gamma_prev = traj_prev[i : self.n + i, :]
+		traj_prev[i : self.n+i, :] = gamma_prev + gamma
+
+		print traj_prev- traj_prev_tmp
+
 		self.traj_pts = traj_prev
 
 		# plot the trajectory
@@ -426,7 +432,7 @@ if __name__ == '__main__':
 
 	T = 8.0
 	trajplanner = Planner(s,g,T)
-	u_h = np.array([0, 20, 0, 0, 0, 0, 0]).reshape((7,1))
+	u_h = np.array([0, 20, 0, 20, 20, 0, 0]).reshape((7,1))
 	trajplanner.deform(u_h)
 	t = 1.0
 	theta = trajplanner.interpolate(t)
