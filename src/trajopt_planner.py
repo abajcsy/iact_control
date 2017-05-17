@@ -35,14 +35,15 @@ class Planner(object):
 		T 		 - total time for trajectory execution
 	"""
 
-	def __init__(self, start, goal, T, waypts=None):	
+	def __init__(self, start, goal, T):	
 		# set first and last waypt as start and goal
 		# NOTE: assume that start and goal are in radians
 
-		# TODO: will have to convert convert from 7x1 np matrix to 1x10 np matrix 
-		# need to add padding to start
+		# have to convert convert from 7x1 np matrix to 1x10 np matrix 
+		# so need to add padding to start
 		padding = np.array([0,0,0])
 		start = np.append(start, padding, 1)
+
 		self.s = start
 		self.g = goal
 		self.totalT = T
@@ -50,6 +51,8 @@ class Planner(object):
 
 		print "totalT: " + str(self.totalT)
 
+		# ---- OpenRAVE Initialization ---- #
+		
 		# initialize openrave and compute waypts
 		model_filename = 'jaco_dynamics'
 		#model_filename = 'jaco'
@@ -58,8 +61,6 @@ class Planner(object):
 		self.env.SetPhysicsEngine(physics)
 
 		# insert any objects you want into environment
-
-		# bodies for visualization in RVIZ
 		self.bodies = []
 		coords = [0.5, 0.3, 0.8]
 		self.plotPoint(coords)
@@ -74,18 +75,40 @@ class Planner(object):
 
 		viewer.SetBkgndColor([0.8,0.8,0.8])
 
+		# --------------------------------- #
+
 		# plan trajectory from self.s to self.g with self.totalT time
-		if waypts is None:
-			self.replan(self.s, self.totalT)
-			print "Waypoint times T:" + str(self.wayptsT) 
-		else:
-			self.set_waypts(waypts, self.totalT)
+		self.plan(self.s, self.totalT)
+		print "Trajectory waypoint times T:" + str(self.wayptsT) 
+
+		# plot the trajectory
+		self.plotTraj()
+
+		# ---- DEFORMATION Initialization ---- #
+
+		# create A matrix
+		a = np.ones((1, self.num_traj_pts))[0]
+		b = np.ones((1, self.num_traj_pts-1))[0]
+		self.A = np.diag(a, 0) + np.diag(b, -1) + np.diag(b, 1)
+		np.fill_diagonal(self.A, -2)
+
+		print "A: " + str(self.A)
+
+		# create R matrix, and R^-1 matrix
+		self.R = self.A.T*self.A
+		Rinv = np.linalg.inv(self.R)
+		print "R: " + str(self.R)
+
+		Uh = np.zeros((self.num_traj_pts, 1))
+		Uh[0] = 1
+
+		self.n = 5 # number of waypoints that will be deformed
+		self.H = Rinv*Uh*(np.sqrt(self.n)/np.linalg.norm(Rinv*Uh))
+		# --------------------------------- #
 
 		# store cartesian waypoints for plotting and debugging
-		self.cartesian_waypts = self.get_cartesian_waypts()
-		self.sampled_cartesian_waypts = self.plotTraj()
+		#self.cartesian_waypts = self.get_cartesian_waypts()
 		#self.plot_cartesian_waypts(self.cartesian_waypts)
-
 
 	def plotPoint(self, coords):
 		with self.env:
@@ -96,63 +119,50 @@ class Planner(object):
 			self.env.Add(body, True)
 			self.bodies.append(body)
 
-	def replan(self, newStart, T):
+	def plan(self, newStart, T):
 		"""
 		Computes a plan from newStart to self.g taking T total time.
 		"""
 		self.s = newStart
 		self.totalT = T
 
-		print "in replan...totalT: " + str(self.totalT)
+		print "in plan...totalT: " + str(self.totalT)
 		self.robot.SetDOFValues(self.s)
 		orig_ee = self.robot.arm.hand.GetTransform()
-		
+
+		# get the raw waypoints from trajopt		
 		self.waypts = self.robot.arm.PlanToConfiguration(self.g)
 		self.num_waypts = self.waypts.GetNumWaypoints()
+		print "Number of ORIGINAL waypoints: " + str(self.num_waypts)
 
-		print "selfs: " + str(self.s[:7])
-		print "selfg: " + str(self.g)
-		if np.array_equal(self.s[:7], self.g):
-			print "START AND GOAL ARE THE SAME. Just holding position."
+		# using the raw waypoints, retime the trajectory to get fine-grained
+		# sampled waypoints along the trajectory
+		self.traj = self.waypts
+		self.traj_pts = self.sample_waypoints(self.traj)
+		self.num_traj_pts = len(self.traj_pts)
 
-		print "in replan...num_waypts: " + str(self.num_waypts)
-		for i in range(self.num_waypts):
-			print self.waypts.GetWaypoint(i)
+		# store index of the closest waypoint robot is at
+		self.curr_waypt_idx = 0
 
-		# compute time, T_i for each of the waypoints i in {1,...n}
-		self.wayptsT = [None]*self.num_waypts
-		T_sum = 0.0
-		if self.num_waypts >= 2:
-			for i in range(self.num_waypts):
-				self.wayptsT[i] = T_sum
-				print "in replan...T_sum: " + str(T_sum)
-				T_sum += self.totalT/(self.num_waypts-1)
-		else:
-			self.wayptsT[0] = self.totalT
+		print self.traj_pts
+		print "Number of RESAMPLED waypoints: " + str(self.num_traj_pts)
 
-	def set_waypts(self, waypoints, T):
-		"""
-		Sets the waypoints for trajectory taking T time. Input is in degrees
-		"""
-		self.totalT = T
+		#print "selfs: " + str(self.s[:7])
+		#print "selfg: " + str(self.g)
+		#if np.array_equal(self.s[:7], self.g):
+		#	print "START AND GOAL ARE THE SAME. Just holding position."
 
-		print "in set_waypts...totalT: " + str(self.totalT)
-		self.robot.SetDOFValues(self.s)
-		orig_ee = self.robot.arm.hand.GetTransform()
-		
-		self.waypts = []
-		for i in range(len(waypoints)):
-			self.waypts.append(waypoints[i]*(math.pi/180.0))
-		self.num_waypts = len(waypoints)
+		#for i in range(self.num_waypts):
+		#	print self.waypts.GetWaypoint(i)
 
 		# compute time, T_i for each of the waypoints i in {1,...n}
-		self.wayptsT = [None]*self.num_waypts
+		self.wayptsT = [None]*self.num_traj_pts
 		T_sum = 0.0
-		if self.num_waypts >= 2:
-			for i in range(self.num_waypts):
+		if self.num_traj_pts >= 2:
+			for i in range(self.num_traj_pts):
 				self.wayptsT[i] = T_sum
-				print "in set_waypts...T_sum: " + str(T_sum)
-				T_sum += self.totalT/(self.num_waypts-1)
+				print "In plan...T_sum: " + str(T_sum)
+				T_sum += self.totalT/(self.num_traj_pts-1)
 		else:
 			self.wayptsT[0] = self.totalT
 
@@ -166,9 +176,9 @@ class Planner(object):
 			waypoint = self.waypts.GetWaypoint(i)
 			dof = np.append(waypoint, np.array([1,1,1]))
 			tf = transformToCartesian(dofToTransform(self.robot, dof))
-			print "cartesian " + str(i) + ": "  + str(cartesian)
+			#print "cartesian " + str(i) + ": "  + str(cartesian)
 			cartesian.append(tf)
-		print "cartesian: " + str(cartesian)
+		#print "cartesian: " + str(cartesian)
 		return np.array(cartesian)
 
 	def plot_cartesian_waypts(self, cartesian):
@@ -199,14 +209,63 @@ class Planner(object):
 
 		self.robot.SetDOFValues(self.curr_pos)
 
+	def deform(self, u_h):
+		"""
+		Deforms waypoints given human applied force, u_h, in c-space
+		"""
+
+		# get the current waypoint that human interacted with
+		curr_waypt = self.traj_pts[self.curr_waypt_idx]
+		
+		# TODO COMPLETE THIS.
+
 	def interpolate(self, t):
+		"""
+		Gets the next desired position along trajectory
+		by interpolating between waypoints given the current t.
+		"""
+		target_pos = self.traj_pts[0]
+		print "NUMBER WAYPOINTS: " + str(self.num_traj_pts)
+		# TODO CHECK CORNER CASES START/END	
+		if self.num_traj_pts >= 2:
+			for i in range(self.num_traj_pts-1):
+				# if between two waypoints, interpolate
+				if t > self.wayptsT[i] and t < self.wayptsT[i+1]:
+					print "between waypt " + str(i) + " and " + str(i+1)
+					# linearly interpolate between waypts
+					prev = self.traj_pts[i]
+					next = self.traj_pts[i+1]
+					Tprev = self.wayptsT[i]
+					Tnext = self.wayptsT[i+1]
+					deltaT = Tnext - Tprev
+					theta = (next - prev)*(1/deltaT)*t + prev
+					target_pos = theta
+					# store index of current waypoint that robot is near
+					self.curr_waypt_idx = i
+				# if exactly at a waypoint, return that waypoint
+				elif t == self.wayptsT[i]:
+					target_pos = self.traj_pts[i]		
+					# store index of current waypoint that robot is near
+					self.curr_waypt_idx = i
+		else:
+			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
+	
+		# if times up, just go to goal
+		if t > self.totalT:
+			print "TIME IS UP. GOING TO FINAL WAYPOINT."
+			target_pos = self.traj_pts[self.num_traj_pts-1]	
+			# store index of current waypoint that robot is near
+			self.curr_waypt_idx = self.num_traj_pts-1
+		target_pos = np.array(target_pos).reshape((7,1))
+		return target_pos
+
+	def interpolate_waypts(self, t):
 		"""
 		Gets the next desired position along trajectory
 		by interpolating between waypoints given the current t.
 		"""
 		target_pos = self.waypts.GetWaypoint(0)
 		print "NUMBER WAYPOINTS: " + str(self.num_waypts)
-		# TODO CHECK CORNER CASES START/END	
 		if self.num_waypts >= 2:
 			for i in range(self.num_waypts-1):
 				# if between two waypoints, interpolate
@@ -233,39 +292,15 @@ class Planner(object):
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
-	def interpolate2(self, t):
+	def sample_traj(self, t):
 		"""
-		Gets the next desired position along trajectory
-		by interpolating between waypoints given the current t.
+		Samples from trajectory (continuous) at given time t.
 		"""
-		target_pos = self.waypts[0]
-		# TODO CHECK CORNER CASES START/END	
-		if self.num_waypts >= 2:
-			for i in range(self.num_waypts-1):
-				# if between two waypoints, interpolate
-				if t > self.wayptsT[i] and t < self.wayptsT[i+1]:
-					# linearly interpolate between waypts
-					prev = self.waypts[i]
-					next = self.waypts[i+1]
-					Tprev = self.wayptsT[i]
-					Tnext = self.wayptsT[i+1]
-					deltaT = Tnext - Tprev
-					theta = (next - prev)*(1/deltaT)*t + prev
-					target_pos = theta
-				# if exactly at a waypoint, return that waypoint
-				elif t == self.wayptsT[i]:
-					target_pos = self.waypts[i]		
-		else:
-			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
-	
-		# if times up, just go to goal
-		if t > self.totalT:
-			print "TIME IS UP. GOING TO FINAL WAYPOINT."
-			target_pos = self.waypts[self.num_waypts-1]	
-		target_pos = np.array(target_pos).reshape((7,1))
+		sample = self.traj.Sample(t)[:7]
+		target_pos = np.array(sample).reshape((7,1))
 		return target_pos
 
-	def sampleWaypoints(self, traj):
+	def sample_waypoints(self, traj):
 		"""
 		Samples waypoints every 0.5 seconds along the trajectory
 		Parameters
@@ -287,25 +322,12 @@ class Planner(object):
 
 		return dofs
 
-	def sampleWaypts2(self, traj):
-		t = 0.0
-		dofs = []
-		while t < self.totalT:
-			theta = self.interpolate(t)
-			dofs.append(theta)
-			t += 0.1
-		print "dofs: " + str(dofs)
-		return dofs
-
 	def plotTraj(self):
 		"""
 		Plots the best trajectory found or planned
 		"""
-		waypoints = self.sampleWaypts2(self.waypts) 
-		#waypoints = self.sampleWaypoints(self.waypts)
 
-		self.bodies += plotWaypoints(self.env, self.robot, waypoints)
-		return waypoints
+		self.bodies += plotWaypoints(self.env, self.robot, self.traj_pts)
 
 if __name__ == '__main__':
 	
@@ -334,7 +356,9 @@ if __name__ == '__main__':
 
 	T = 8.0
 	trajplanner = Planner(s,g,T)
-	#t = 0.8
-	#theta = trajplanner.interpolate(t)
+	t = 0.8
+	theta = trajplanner.interpolate(t)
+	print "theta: " + str(theta)
+	print trajplanner.traj.Sample(0.1)
 	trajplanner.execute_path_sim()
 	time.sleep(20)

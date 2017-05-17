@@ -91,7 +91,7 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# get trajectory planner
-		T = 8.0
+		T = 15.0
 
 		p1 = home_pos #pos1 #candlestick_pos
 		p2 = candlestick_pos #pos2 #home_pos
@@ -256,6 +256,21 @@ class PIDVelJaco(object):
 		# save running list of joint torques
 		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
 
+		print "Current torque: " + str(torque_curr)
+		interaction = False
+		for i in range(7):
+			if np.fabs(torque_curr[i][0]) > 8:
+				interaction = True
+			else:
+				# zero out torques below threshold for cleanliness
+				torque_curr[i][0] = 0.0
+		print "Cleaned torque: " + str(torque_curr)
+
+		# if experienced large enough interaction force, then deform traj
+		if interaction:
+			print "---INTERACTION---"
+			#self.planner.deform(torque_curr)
+
 		# update the plot of joint torques over time
 		#t = time.time() - self.process_start_T
 		#self.plotter.update_joint_torque(torque_curr, force_theta, force_mag, t)
@@ -343,10 +358,11 @@ class PIDVelJaco(object):
 
 			t = time.time() - self.path_start_T
 			print "t: " + str(t)
+
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)
+			#self.target_pos = self.planner.sample_traj(t)
 
-			#print "new target pos from planner: " + str(self.target_pos)
 		# check if the arm reached the goal, and restart path
 		if not self.reached_goal:
 			#dist_from_goal = np.fabs(curr_pos - self.goal_pos)
