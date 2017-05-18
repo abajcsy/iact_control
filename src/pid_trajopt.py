@@ -359,6 +359,13 @@ class PIDVelJaco(object):
 			t = time.time() - self.path_start_T
 			print "t: " + str(t)
 
+			tstart = time.time()
+			if t > 10 and t < 10.1:
+				print "it is replanning!"
+				self.planner.plan(curr_pos, 15)
+				tend = time.time()
+				print "Time is took: " + str(tend - tstart)
+
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)
 			#self.target_pos = self.planner.sample_traj(t)

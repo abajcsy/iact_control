@@ -143,6 +143,14 @@ class Planner(object):
 		"""
 		Computes a plan from newStart to self.g taking T total time.
 		"""
+		if len(newStart) < 10:
+			newStart = newStart.reshape(7)
+			print "length too short " + str(len(newStart))
+			padding = np.array([0,0,0])
+			print "start: " + str(newStart)
+			print "padding: " + str(padding)
+			newStart = np.append(newStart, padding, 1)
+
 		self.s = newStart
 		self.totalT = T
 
@@ -279,8 +287,6 @@ class Planner(object):
 
 		gamma_prev = traj_prev[i : self.n + i, :]
 		traj_prev[i : self.n+i, :] = gamma_prev + gamma
-
-		print traj_prev- traj_prev_tmp
 
 		self.traj_pts = traj_prev
 
@@ -436,6 +442,8 @@ if __name__ == '__main__':
 	trajplanner.deform(u_h)
 	t = 1.0
 	theta = trajplanner.interpolate(t)
+	newStart = np.array(waypt1).reshape((7,1))
+	trajplanner.plan(newStart,10)
 	#print "theta: " + str(theta)
 	#print trajplanner.traj.Sample(0.1)
 	#trajplanner.execute_path_sim()
