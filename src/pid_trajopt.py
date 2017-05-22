@@ -19,6 +19,7 @@ import actionlib
 import time
 import plot
 import trajopt_planner
+import traj
 import sim_robot
 
 import kinova_msgs.msg
@@ -38,17 +39,9 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pos1 = [14.30,162.95,190.75,124.03,176.10,188.25,167.94]
-pos2 = [121.89,159.32,213.20,109.06,153.09,185.10,170.77]
-
-waypt1 = [136.886, 200.805, 64.022, 116.637, 138.328, 122.469, 179.861]
-waypt2 = [271.091, 225.708, 20.548, 158.572, 160.879, 183.520, 186.644]
-waypt3 = [338.680, 172.142, 25.755, 96.798, 180.497, 137.340, 186.655]
-
-traj = [np.array(waypt1), np.array(waypt2), np.array(waypt3)]
-
 epsilon = 0.10
-interaction_thresh = 5.0 #this is never used in the file
+MAX_CMD_TORQUE = 40.0
+INTERACTION_TORQUE_THRESHOLD = 8.0
 
 class PIDVelJaco(object): 
 	"""
@@ -84,23 +77,24 @@ class PIDVelJaco(object):
 		# ---- ROS Setup ---- #
 		rospy.init_node("pid_vel_trajopt")
 
-		# switch robot to torque-control mode if not in simulation
-		#if not sim_flag:
-			#self.init_torque_mode()
-
 		# ---- Trajectory Setup ---- #
 
-		# get trajectory planner
-		T = 25.0
+		# total time for trajectory
+		self.T = 25.0
 
-		p1 = home_pos #pos1 #candlestick_pos
-		p2 = candlestick_pos #pos2 #home_pos
+		# store trajectory features and weights
+		self.features = None
+		self.weights = None
 
-		start = np.array(p1)*(math.pi/180.0)
-		goal = np.array(p2)*(math.pi/180.0)
+		start = np.array(home_pos)*(math.pi/180.0)
+		goal = np.array(candlestick_pos)*(math.pi/180.0)
 
-		# create the trajopt planner from start to goal
-		self.planner = trajopt_planner.Planner(start, goal, T)
+		# create the trajopt planner and plan from start to goal
+		self.planner = trajopt_planner.Planner()
+		waypts = self.planner.plan(start, goal, self.features, self.weights, self.T)
+
+		# store the current trajectory to execute
+		self.curr_traj = traj.Trajectory(waypts, self.features, self.weights, self.T)
 
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
@@ -113,19 +107,16 @@ class PIDVelJaco(object):
 		self.reached_start = False
 		self.reached_goal = False
 
-		#print "HAS REACHED START? " + str(self.reached_start)
-
 		# ------------------------- #
 
-		self.max_cmd = 40*np.eye(7)
+		# stores maximum COMMANDED joint torques		
+		self.max_cmd = MAX_CMD_TORQUE*np.eye(7)
 		# stores current COMMANDED joint torques
 		self.cmd = np.eye(7) 
 		# stores current joint MEASURED joint torques
 		self.joint_torques = np.zeros((7,1))
 
 		# ----- Controller Setup ----- #
-
-		print "PID Gains: " + str(p_gain) + ", " + str(i_gain) + "," + str(d_gain)
 
 		self.p_gain = p_gain
 		self.i_gain = i_gain
@@ -138,9 +129,6 @@ class PIDVelJaco(object):
 		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
 		# ---------------------------- #
-
-		# stuff for plotting
-		self.plotter = plot.Plotter(self.p_gain,self.i_gain,self.d_gain)
 
 		# keeps running time since beginning of program execution
 		self.process_start_T = time.time() 
@@ -172,15 +160,8 @@ class PIDVelJaco(object):
 				line = raw_input()
 				break
 
-			self.vel_pub.publish(self.cmd_to_JointVelocityMsg()) 
-			#self.waypt_pub.publish(self.waypts_to_PoseArrayMsg())
+			self.vel_pub.publish(self.cmd_to_JointVelocityMsg())
 			r.sleep()
-
-		# plot the error over time after finished
-		tot_path_time = time.time() - self.path_start_T
-
-		#self.plotter.plot_PID(tot_path_time)
-		self.plotter.plot_tau_PID(tot_path_time)
 
 
 	def cmd_to_JointTorqueMsg(self):
@@ -242,7 +223,6 @@ class PIDVelJaco(object):
 		Return a control torque based on PID control
 		"""
 		error = -((self.target_pos - pos + math.pi)%(2*math.pi) - math.pi)
-		#print "error: " + str(error)
 		return -self.controller.update_PID(error)
 
 	def joint_torques_callback(self, msg):
@@ -253,13 +233,10 @@ class PIDVelJaco(object):
 		# read the current joint torques from the robot
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
-		# save running list of joint torques
-		self.joint_torques = np.column_stack((self.joint_torques,torque_curr))
-
 		print "Current torque: " + str(torque_curr)
 		interaction = False
 		for i in range(7):
-			if np.fabs(torque_curr[i][0]) > 8:
+			if np.fabs(torque_curr[i][0]) > INTERACTION_TORQUE_THRESHOLD:
 				interaction = True
 			else:
 				# zero out torques below threshold for cleanliness
@@ -269,11 +246,7 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			self.planner.deform(torque_curr)
-
-		# update the plot of joint torques over time
-		#t = time.time() - self.process_start_T
-		#self.plotter.update_joint_torque(torque_curr, force_theta, force_mag, t)
+			self.curr_traj.deform(torque_curr)
 
 	def joint_state_callback(self, msg):
 		"""		
@@ -310,19 +283,6 @@ class PIDVelJaco(object):
 			if self.cmd[i][i] < -self.max_cmd[i][i]:
 				self.cmd[i][i] = -self.max_cmd[i][i]
 
-		# update plotter with new error measurement, torque command, and path time
-		curr_time = time.time() - self.process_start_T
-		cmd_tau = np.diag(self.controller.cmd).reshape((7,1))
-
-		#print "target_pos: " + str(self.target_pos)
-		#print "curr_pos: " + str(curr_pos)
-		#print "cmd: " + str(self.cmd)
-		#dist_to_target = -((self.target_pos - curr_pos + math.pi)%(2*math.pi) - math.pi)
-		dist_to_target = -((self.target_pos - curr_pos + math.pi)%(2*math.pi) - math.pi)
-		#print "dist to target: " + str(dist_to_target)
-
-		self.plotter.update_PID_plot(self.controller.p_error, self.controller.i_error, self.controller.d_error, cmd_tau, curr_time)
-
 	def update_target_pos(self, curr_pos):
 		"""
 		Takes the current position of the robot. Determines what the next
@@ -332,10 +292,9 @@ class PIDVelJaco(object):
 		"""
 		# check if the arm is at the start of the path to execute
 		if not self.reached_start:
-			#dist_from_start = np.fabs(curr_pos - self.start_pos)
+
 			dist_from_start = -((curr_pos - self.start_pos + math.pi)%(2*math.pi) - math.pi)			
 			dist_from_start = np.fabs(dist_from_start)
-			#print "dist from start: " + str(dist_from_start)
 
 			# check if every joint is close enough to start configuration
 			close_to_start = [dist_from_start[i] < epsilon for i in range(7)]
@@ -346,8 +305,6 @@ class PIDVelJaco(object):
 			if is_at_start:
 				self.reached_start = True
 				self.path_start_T = time.time()
-				# for plotting, save time when path execution started
-				self.plotter.set_path_start_time(time.time() - self.process_start_T)
 			else:
 				print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
@@ -359,24 +316,21 @@ class PIDVelJaco(object):
 			t = time.time() - self.path_start_T
 			print "t: " + str(t)
 
-			tstart = time.time()
-			if t > 10 and t < 10.1:
-				print "it is replanning!"
-				self.planner.plan(curr_pos, 15)
-				tend = time.time()
-				print "Time is took: " + str(tend - tstart)
+			#startT = time.time()
+			#if t > 10.0 and t < 10.1:
+			#	print "REPLANNING...."
+			#	self.planner.plan(curr_pos, self.T - t)
+			#	endT = time.time()
+			#	print "Replanning took: " + str(endT - startT) + " seconds"
 
 			# get next target position from position along trajectory
-			self.target_pos = self.planner.interpolate(t)
-			#self.target_pos = self.planner.sample_traj(t)
+			self.target_pos = self.curr_traj.interpolate(t)
 
 		# check if the arm reached the goal, and restart path
 		if not self.reached_goal:
-			#dist_from_goal = np.fabs(curr_pos - self.goal_pos)
 			
 			dist_from_goal = -((curr_pos - self.goal_pos + math.pi)%(2*math.pi) - math.pi)			
 			dist_from_goal = np.fabs(dist_from_goal)
-			##print "dist from goal: " + str(dist_from_goal)
 
 			# check if every joint is close enough to goal configuration
 			close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]
