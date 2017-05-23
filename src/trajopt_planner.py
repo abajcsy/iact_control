@@ -20,6 +20,7 @@ from util import *
 import logging
 import pid
 import copy
+import json
 
 import sim_robot
 
@@ -42,8 +43,10 @@ class Planner(object):
 
 		# insert any objects you want into environment
 		self.bodies = []
-		coords = [0.5, 0.3, 0.8]
-		#self.plotPoint(coords)
+		coords = [0.4, 0.4, 0.8]
+		self.plotPoint(coords, 0.1)
+		coords = [-0.2, 0.2, 0.6]
+		self.plotPoint(coords, 0.1)
 
 		viewer = self.env.GetViewer()
 
@@ -57,25 +60,71 @@ class Planner(object):
 
 		viewer.SetBkgndColor([0.8,0.8,0.8])
 
-	def plan(self, start, goal, features, weights, T):
+	def plan(self, start, goal, weights, init_traj, T):
 		"""
-		Computes a plan from newStart to self.g taking T total time.
+		Computes a plan from start to goal taking T total time.
+		weights will determine the cost function, and 
+		init_traj is our initial guess
 		"""
+
 		if len(start) < 10:
-			start = start.reshape(7)
-			print "length too short " + str(len(start))
 			padding = np.array([0,0,0])
-			start = np.append(start, padding, 1)
+			aug_start = np.append(start.reshape(7), padding, 1)
+		self.robot.SetDOFValues(aug_start)
 
-		self.robot.SetDOFValues(start)
-		orig_ee = self.robot.arm.hand.GetTransform()
+		n_waypoints = 10
+		w_length = weights[0]
+		w_collision = weights[1]
+		if init_traj == None:
+			init_traj = np.zeros((n_waypoints,7))
+			for count in range(n_waypoints):
+				init_traj[count,:] = start + count/(n_waypoints - 1.0)*(goal - start)
 
-		# get the raw waypoints from trajopt		
-		# TODO convert features & weights to traj_costs
-		# TODO waypts = self.robot.arm.PlanToConfiguration(goal, traj_costs=traj_costs)
-		self.waypts = self.robot.arm.PlanToConfiguration(goal)
+		request = {
+			"basic_info": {
+				"n_steps": n_waypoints,
+				"manip" : "j2s7s300"
+			},
+			"costs": [
+			{
+				"type": "joint_vel",
+				"params": {"coeffs": [w_length]}
+			},
+			{
+				"type": "collision",
+				"params": {
+				"coeffs": [w_collision],
+				"dist_pen": [0.5]
+				},
+			}
+			],
+			"constraints": [
+			{
+				"type": "joint",
+				"params": {"vals": goal.tolist()}
+			}
+			],
+			"init_info": {
+                #"type": "straight_line",
+                #"endpoint": goal.tolist()
+                "type": "given_traj",
+                "data": init_traj.tolist()
+			}
+		}
+
+		s = json.dumps(request)
+		prob = trajoptpy.ConstructProblem(s, self.env)
+		start_time = time.time()
+		result = trajoptpy.OptimizeProblem(prob)
+		elapsed_time = time.time() - start_time
+		print "optimization took %.3f seconds"%elapsed_time
+		self.waypts = result.GetTraj()
 
 		return self.waypts
+
+
+
+
 
 
 	# ------- Plotting Utils ------- #
@@ -144,7 +193,6 @@ class Planner(object):
 
 		self.robot.SetDOFValues(self.curr_pos)
 
-
 if __name__ == '__main__':
 
 	trajplanner = Planner()
@@ -165,3 +213,6 @@ if __name__ == '__main__':
 
 	trajplanner.execute_path_sim()
 	time.sleep(20)
+
+
+

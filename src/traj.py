@@ -1,7 +1,6 @@
 import numpy as np
 from numpy import linalg
 from numpy import linspace
-import matplotlib.pyplot as plt
 import time
 import math
 
@@ -10,8 +9,6 @@ from sympy import lambdify
 
 import trajoptpy
 import or_trajopt
-import openravepy
-from openravepy import *
 
 import interactpy
 from interactpy import *
@@ -34,17 +31,17 @@ class Trajectory(object):
 		weights  - list of weights for trajectory features
 	"""
 
-	def __init__(self, waypts, features, weights, T):	
+	def __init__(self, waypts, weights, T):	
 
 		# raw waypoints from Planner
-		self.waypts = waypts
-		self.num_waypts = self.waypts.GetNumWaypoints()
+		self.traj_pts = waypts
+		self.num_traj_pts = waypts.shape[0]
 
 		# using the raw waypoints, retime the trajectory to get fine-grained
 		# sampled waypoints along the trajectory
-		self.traj = self.waypts
-		self.traj_pts = self.sample_waypoints(self.traj)
-		self.num_traj_pts = len(self.traj_pts)
+		#self.traj = self.waypts
+		#self.traj_pts = self.sample_waypoints(self.traj)
+		#self.num_traj_pts = len(self.traj_pts)
 
 		# store index of the closest waypoint robot is at
 		self.curr_waypt_idx = 0
@@ -63,7 +60,6 @@ class Trajectory(object):
 	
 		self.s = self.traj_pts[0]
 		self.g = self.traj_pts[self.num_traj_pts-1]
-		self.features = features
 		self.weight = weights
 
 		# ---- DEFORMATION Initialization ---- #
@@ -88,7 +84,7 @@ class Trajectory(object):
 
 		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
 
-	def deform(self, u_h):
+	def deform_propogate(self, u_h):
 		"""
 		Deforms waypoints given human applied force, u_h, in c-space.
 		----
@@ -100,7 +96,7 @@ class Trajectory(object):
 
 		# sanity check - if there are less than n waypoints remaining in 
 		# entire trajectory, then just change as many as you can till end
-		if (self.curr_waypt_idx + self.n) > self.num_traj_pts:
+		if (self.curr_waypt_idx + self.n) >= self.num_traj_pts:
 			print "Less than n=" + str(self.n) + " waypoints remaining!"
 			return
 
@@ -119,8 +115,25 @@ class Trajectory(object):
 		"""
 		Deform a single waypoint given u_h
 		"""
-		#TODO
-		return 
+		# arbitration parameter
+		mu = -0.005
+
+		if (self.curr_waypt_idx + 1) >= self.num_traj_pts:
+			print "Less than 1 waypoints remaining!"
+			return
+
+		traj_pts_prime = copy.deepcopy(self.traj_pts)
+		
+		gamma = np.zeros((1,7))
+		for joint in range(7):
+			gamma[:,joint] = mu*u_h[joint]
+
+		gamma_prev = traj_pts_prime[self.curr_waypt_idx : 1 + self.curr_waypt_idx, :]
+		traj_pts_prime[self.curr_waypt_idx : 1 + self.curr_waypt_idx, :] = gamma_prev + gamma
+
+		weights_prime = update_weights(self.traj_pts, traj_pts_prime)
+
+		return weights_prime
 
 	def interpolate(self, t):
 		"""
@@ -170,14 +183,13 @@ class Trajectory(object):
 		# TODO
 		return 
 
-	def update_weights(self, oldTraj, newTraj=None):
+	def update_weights(self, oldTraj, newTraj):
 		"""
 		Returns updated weights for new trajectory 
 		given old trajectory
 		"""
-		trajPrime = newTraj		
-		if newTraj is None:
-			trajPrime = self.traj
+
+		
 		#TODO
 		return
 
