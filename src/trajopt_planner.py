@@ -160,10 +160,12 @@ class Planner(object):
 		w_collision = weights[1]
 
 		if self.waypts_plan == None:
+			#if no plan, straight line
 			init_waypts = np.zeros((n_waypoints,7))
 			for count in range(n_waypoints):
 				init_waypts[count,:] = start + count/(n_waypoints - 1.0)*(goal - start)
 		else:
+			#if is plan, use previous as initial plan
 			init_waypts = self.waypts_plan 
 		self.num_waypts_plan = n_waypoints
 
