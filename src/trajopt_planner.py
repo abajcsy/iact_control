@@ -21,20 +21,17 @@ import logging
 import pid
 import copy
 import json
+import util
 
 import sim_robot
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
-
-
 
 class Planner(object):
 	"""
 	This class plans a trajectory from start to goal 
 	with TrajOpt. 
 	"""
-
-
 
 	def __init__(self):
 
@@ -91,12 +88,48 @@ class Planner(object):
 		Uh[0] = 1
 		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
 
+	# ---- custom cost functions ---- #
 
+	def D(self, coord):
+		"""
+		Computes euclidian distance from current coord = (x,y,z)
+		to a circular obstacle.
+		"""
 
+		obstacle_coords = np.array([0.0, 0.4, 0.8])
+		obstacle_radius = 0.1
 
+		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
+
+		return dist
+
+	def obstacle_cost(self, dof):
+		"""
+		Obstacle cost function that penalizes the robot for being near obstacles.
+		From CHOMP algorithm (Zucker, 2013).
+		"""
+		if len(dof) < 10:
+			padding = np.array([0,0,0])
+			dof = np.append(dof.reshape(7), padding, 1)
+		# get (x,y,z) coordinates for each robot dof
+		self.robot.SetDOFValues(dof)
+		coords = self.robotToCartesian()
+		epsilon = 0.4
+
+		# one cost per joint (7 total)
+		cost = [0.0]*len(coords)
+		jointIdx = 0
+		for coord in coords:
+			dist = self.D(coord)
+			if dist < 0:
+				cost[jointIdx] = -dist + 1/(2 * epsilon)
+			elif 0 < dist <= epsilon:
+				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2
+			jointIdx += 1
+
+		return cost
 
 	# ---- let's replan a new trajectory ---- #
-
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
 
@@ -106,8 +139,6 @@ class Planner(object):
 		self.trajOpt(start, goal, weights)
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 		self.upsample(step_time)
-
-
 
 	def upsample(self, step_time):
 
@@ -142,12 +173,9 @@ class Planner(object):
 		self.waypts = waypts
 		self.waypts_time = waypts_time
 
-
-
 	def trajOpt(self, start, goal, weights):
 		"""
 		Computes a plan from start to goal taking T total time.
-
 		"""
 
 		if len(start) < 10:
@@ -178,14 +206,15 @@ class Planner(object):
 			{
 				"type": "joint_vel",
 				"params": {"coeffs": [w_length]}
-			},
-			{
-				"type": "collision",
-				"params": {
-				"coeffs": [w_collision],
-				"dist_pen": [0.5]
-				},
 			}
+			#,
+			#{
+			#	"type": "collision",
+			#	"params": {
+			#	"coeffs": [w_collision],
+			#	"dist_pen": [0.5]
+			#	},
+			#}
 			],
 			"constraints": [
 			{
@@ -201,14 +230,17 @@ class Planner(object):
 
 		s = json.dumps(request)
 		prob = trajoptpy.ConstructProblem(s, self.env) #maybe we could get useful stuff from prob? some object?
+
+		# add custom cost functions
+		for t in range(1,self.num_waypts_plan):    
+			# use numerical method 
+			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+
 		result = trajoptpy.OptimizeProblem(prob) #can use result to check our own rolled functions?
 		self.waypts_plan = result.GetTraj()
 
 
-
-
 	# ---- let's find the target position ---- #
-
 
 	def interpolate(self, curr_time):
 		"""
@@ -244,8 +276,6 @@ class Planner(object):
 		return target_pos
 
 
-
-
 	# ---- let's deform the trajectory ---- #
 
 
@@ -262,17 +292,24 @@ class Planner(object):
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
 
 
+	# ------- Plotting & Conversion Utils ------- #
 
+	def robotToCartesian(self):
+		"""
+		Converts robot configuration into a list of cartesian 
+		(x,y,z) coordinates for each of the robot's links.
+		------
+		Returns: 7-dimensional list of 3 xyz values
+		"""
+		links = self.robot.GetLinks()
+		cartesian = [None]*7
+		i = 0
+		for i in range(1,8):
+			link = links[i] 
+			tf = link.GetTransform()
+			cartesian[i-1] = tf[0:3,3]
 
-
-
-
-
-
-
-
-
-	# ------- Plotting Utils ------- #
+		return cartesian
 
 	def plotTraj(self):
 		"""
@@ -300,29 +337,9 @@ class Planner(object):
 			body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 			self.bodies.append(body)
 
-	def plot_cartesian_waypts(self, cartesian):
+	def executePathSim(self):
 		"""
-		Plots cartesian waypoints in OpenRAVE.
-		"""
-		for i in range(self.num_waypts):
-			self.plotPoint(cartesian[i])
-
-	def get_cartesian_waypts(self):
-		"""
-		Returns list of waypoints along trajectory in task-space
-		- Return type: list of length 3 numpy arrays
-		"""
-		cartesian = []
-		for i in range(self.num_waypts):
-			waypoint = self.waypts.GetWaypoint(i)
-			dof = np.append(waypoint, np.array([1,1,1]))
-			tf = transformToCartesian(dofToTransform(self.robot, dof))
-			cartesian.append(tf)
-		return np.array(cartesian)
-
-	def execute_path_sim(self):
-		"""
-		Executes in simulation the planned trajectory
+		Executes in the planned trajectory in simulation
 		"""
 		self.robot.ExecutePath(self.waypts)
 
@@ -349,14 +366,10 @@ if __name__ == '__main__':
 	g = np.array(candlestick)*(math.pi/180.0)
 	T = 8.0
 	features = None
-	weights = None
+	weights = [1,1]
 
-	startT = time.time()
-	trajplanner.plan(s,g,features, weights, T)
-	endT = time.time()
-	print "Replanning took: " + str(endT - startT) + " seconds"
-
-	trajplanner.execute_path_sim()
+	trajplanner.replan(s, g, weights, 0.0, T, 1.0)
+	trajplanner.executePathSim()
 	time.sleep(20)
 
 
