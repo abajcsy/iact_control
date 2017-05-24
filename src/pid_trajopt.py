@@ -80,23 +80,23 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 25.0
+		self.T = 50.0
 
 		# initialize trajectory weights
-		self.weights = [1, 20]
+		self.weights = [1, 0]
 
 		start = np.array(home_pos)*(math.pi/180.0)
 		goal = np.array(candlestick_pos)*(math.pi/180.0)
+		self.start = start
+		self.goal = goal
 		
 		# create the trajopt planner and plan from start to goal
 		self.planner = trajopt_planner.Planner()
-		start_time = time.time()
-		waypts = self.planner.plan(start, goal, self.weights, None, self.T)
-		elapsed_time = time.time() - start_time
-		print "initial planning %.3f seconds"%elapsed_time
+		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 
 		# store the current trajectory to execute
-		self.curr_traj = traj.Trajectory(waypts, self.weights, self.T)
+		#self.curr_traj = traj.Trajectory()
+		#self.curr_traj.update(waypts, 0.0, self.T, 0.7)
 
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
@@ -248,7 +248,10 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			self.curr_traj.deform_propogate(torque_curr)
+			#self.planner.deform(torque_curr)
+			self.weights[1] += 0.05
+			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
+			print "I just replanned??"
 
 	def joint_state_callback(self, msg):
 		"""		
@@ -326,7 +329,7 @@ class PIDVelJaco(object):
 			#	print "Replanning took: " + str(endT - startT) + " seconds"
 
 			# get next target position from position along trajectory
-			self.target_pos = self.curr_traj.interpolate(t)
+			self.target_pos = self.planner.interpolate(t)
 
 		# check if the arm reached the goal, and restart path
 		if not self.reached_goal:
