@@ -67,7 +67,7 @@ class Planner(object):
 		self.plotLaptop()
 
 		# plot obstacles
-		coords = [0.2, 0.2, 0.8]
+		#coords = [0.2, 0.2, 0.8]
 		#self.plotPoint(coords, 0.2)
 		#coords = [-0.2, 0.2, 0.6]
 		#self.plotPoint(coords, 0.1)
@@ -126,7 +126,9 @@ class Planner(object):
 		obstacle_radius = 0.2
 
 		if xyz is False:
-			obstacle_coords = np.array([0.2, 0.2])
+			obstacle_radius = 0.15
+			obstacle_coords = np.array([-0.508, 0])
+			#self.plotPoint([-0.508, 0, 0], obstacle_radius)
 			coord = coord[0:2]
 
 		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
@@ -149,7 +151,6 @@ class Planner(object):
 		"""
 		Computes distance to obstacle for only end-effector
 		"""
-		print "dof: " + str(dof)
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
@@ -164,7 +165,7 @@ class Planner(object):
 		if dist < 0:
 			cost = -dist + 1/(2 * epsilon)
 		elif 0 < dist <= epsilon:
-			cost = 1/(2 * epsilon) * (dist - epsilon)**2			
+			cost = 1/(2 * epsilon) * (dist - epsilon)**2
 
 		return cost
 
@@ -174,8 +175,6 @@ class Planner(object):
 		"""
 		Computes distance to obstacle for each of the 7 dofs
 		"""
-
-		print "dof: " + str(dof)
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
@@ -264,7 +263,7 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), padding, 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 10
+		self.num_waypts_plan = 20
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
@@ -288,7 +287,7 @@ class Planner(object):
 			{
 				"type": "collision",
 				"params": {
-				"coeffs": [self.weights[1]],
+				"coeffs": [0],
 				"dist_pen": [0.5]
 				},
 			}
@@ -309,10 +308,6 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		# add custom cost functions
-		#for t in range(1,self.num_waypts_plan): 
-			# use numerical method 
-			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
-
 		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
 			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
