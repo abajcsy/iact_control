@@ -15,15 +15,11 @@ from openravepy import *
 
 import interactpy
 from interactpy import *
-from util import *
 
 import logging
 import pid
 import copy
 import json
-import util
-
-import sim_robot
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 

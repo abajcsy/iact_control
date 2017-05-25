@@ -12,7 +12,6 @@ import or_trajopt
 
 import interactpy
 from interactpy import *
-from util import *
 
 import logging
 import pid
