@@ -7,7 +7,6 @@ import interactpy
 
 from jaco import Jaco
 
-
 def dofToTransform(robot, dof):
     if len(dof) == 7:
         dof = np.append(dof, np.array([1,1,1]))

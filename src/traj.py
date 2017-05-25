@@ -18,8 +18,6 @@ import logging
 import pid
 import copy
 
-import sim_robot
-
 class Trajectory(object):
 	"""
 	This class represents a trajectory from start to goal.
