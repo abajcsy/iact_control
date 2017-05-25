@@ -17,10 +17,9 @@ import thread
 import argparse
 import actionlib
 import time
-import plot
 import trajopt_planner
 import traj
-import sim_robot
+import ros_utils
 
 import kinova_msgs.msg
 import geometry_msgs.msg
@@ -59,10 +58,11 @@ class PIDVelJaco(object):
 		K_d = accounts for possible future trends of error, based on current rate of change
 	
 	Subscribes to: 
-		/j2s7s300_driver/out/joint_angles	- Jaco joint angles
+		/j2s7s300_driver/out/joint_angles	- Jaco sensed joint angles
+		/j2s7s300_driver/out/joint_torques	- Jaco sensed joint torques
 	
 	Publishes to:
-		/j2s7s300_driver/in/joint_velocity	- Jaco joint velocities 
+		/j2s7s300_driver/in/joint_velocity	- Jaco commanded joint velocities 
 	
 	Required parameters:
 		p_gain, i_gain, d_gain    - gain terms for the PID controller
@@ -73,9 +73,6 @@ class PIDVelJaco(object):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
-
-		# ---- ROS Setup ---- #
-		rospy.init_node("pid_vel_trajopt")
 
 		# ---- Trajectory Setup ---- #
 
@@ -94,10 +91,6 @@ class PIDVelJaco(object):
 		self.planner = trajopt_planner.Planner()
 		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 
-		# store the current trajectory to execute
-		#self.curr_traj = traj.Trajectory()
-		#self.curr_traj.update(waypts, 0.0, self.T, 0.7)
-
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
 		# save start configuration of arm
@@ -109,7 +102,12 @@ class PIDVelJaco(object):
 		self.reached_start = False
 		self.reached_goal = False
 
-		# ------------------------- #
+		# keeps running time since beginning of program execution
+		self.process_start_T = time.time() 
+		# keeps running time since beginning of path
+		self.path_start_T = None 
+
+		# ----- Controller Setup ----- #
 
 		# stores maximum COMMANDED joint torques		
 		self.max_cmd = MAX_CMD_TORQUE*np.eye(7)
@@ -118,37 +116,23 @@ class PIDVelJaco(object):
 		# stores current joint MEASURED joint torques
 		self.joint_torques = np.zeros((7,1))
 
-		# ----- Controller Setup ----- #
-
-		self.p_gain = p_gain
-		self.i_gain = i_gain
-		self.d_gain = d_gain
-
 		# P, I, D gains 
-		self.P = self.p_gain*np.eye(7)
-		self.I = self.i_gain*np.eye(7)
-		self.D = self.d_gain*np.eye(7)
+		self.P = p_gain*np.eye(7)
+		self.I = i_gain*np.eye(7)
+		self.D = d_gain*np.eye(7)
 		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
-		# ---------------------------- #
+		# ---- ROS Setup ---- #
 
-		# keeps running time since beginning of program execution
-		self.process_start_T = time.time() 
-		# keeps running time since beginning of path
-		self.path_start_T = None 
+		rospy.init_node("pid_trajopt")
 
 		# create joint-velocity publisher
 		self.vel_pub = rospy.Publisher(prefix + '/in/joint_velocity', kinova_msgs.msg.JointVelocity, queue_size=1)
-		# create publisher of the cartesian waypoints
-		self.waypt_pub = rospy.Publisher('/cartesian_waypts', geometry_msgs.msg.PoseArray, queue_size=1)
 
 		# create subscriber to joint_angles
 		rospy.Subscriber(prefix + '/out/joint_angles', kinova_msgs.msg.JointAngles, self.joint_angles_callback, queue_size=1)
-		# create subscriber to joint_state --> get joint state in radians
-		rospy.Subscriber(prefix + '/out/joint_state', sensor_msgs.msg.JointState, self.joint_state_callback, queue_size=1)
 		# create subscriber to joint_torques
 		rospy.Subscriber(prefix + '/out/joint_torques', kinova_msgs.msg.JointTorque, self.joint_torques_callback, queue_size=1)
-
 
 		# publish to ROS at 100hz
 		r = rospy.Rate(100) 
@@ -162,63 +146,8 @@ class PIDVelJaco(object):
 				line = raw_input()
 				break
 
-			self.vel_pub.publish(self.cmd_to_JointVelocityMsg())
+			self.vel_pub.publish(ros_utils.cmd_to_JointVelocityMsg(self.cmd))
 			r.sleep()
-
-
-	def cmd_to_JointTorqueMsg(self):
-		"""
-		Returns a JointTorque Kinova msg from an array of torques
-		"""
-		jointCmd = kinova_msgs.msg.JointTorque()
-		jointCmd.joint1 = self.cmd[0][0];
-		jointCmd.joint2 = self.cmd[1][1];
-		jointCmd.joint3 = self.cmd[2][2];
-		jointCmd.joint4 = self.cmd[3][3];
-		jointCmd.joint5 = self.cmd[4][4];
-		jointCmd.joint6 = self.cmd[5][5];
-		jointCmd.joint7 = self.cmd[6][6];
-		
-		return jointCmd
-
-	def cmd_to_JointVelocityMsg(self):
-		"""
-		Returns a JointVelocity Kinova msg from an array of velocities
-		"""
-		jointCmd = kinova_msgs.msg.JointVelocity()
-		jointCmd.joint1 = self.cmd[0][0];
-		jointCmd.joint2 = self.cmd[1][1];
-		jointCmd.joint3 = self.cmd[2][2];
-		jointCmd.joint4 = self.cmd[3][3];
-		jointCmd.joint5 = self.cmd[4][4];
-		jointCmd.joint6 = self.cmd[5][5];
-		jointCmd.joint7 = self.cmd[6][6];
-
-		return jointCmd
-
-	def waypts_to_PoseArrayMsg(self):
-		"""
-		Returns a PoseArray msg from an array of 3D carteian waypoints
-		"""
-		poseArray = geometry_msgs.msg.PoseArray()
-		poseArray.header.stamp = rospy.Time.now()
-		poseArray.header.frame_id = "/root"
-
-		#cart_waypts = self.planner.cartesian_waypts
-		cart_waypts = self.planner.sampled_cartesian_waypts
-		for i in range(len(cart_waypts)):
-			somePose = geometry_msgs.msg.Pose()
-			somePose.position.x = cart_waypts[i][0]
-			somePose.position.y = cart_waypts[i][1]
-			somePose.position.z = cart_waypts[i][2]
-
-			somePose.orientation.x = 0.0
-			somePose.orientation.y = 0.0
-			somePose.orientation.z = 0.0
-			somePose.orientation.w = 1.0
-			poseArray.poses.append(somePose)
-
-		return poseArray
 
 	def PID_control(self, pos):
 		"""
@@ -252,12 +181,6 @@ class PIDVelJaco(object):
 			#self.weights[1] += 0.05
 			#self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 			#print "I just replanned??"
-
-	def joint_state_callback(self, msg):
-		"""		
-		Reads the joint state in radians
-		"""
-		curr_pos = msg.position
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -320,13 +243,6 @@ class PIDVelJaco(object):
 
 			t = time.time() - self.path_start_T
 			print "t: " + str(t)
-
-			#startT = time.time()
-			#if t > 10.0 and t < 10.1:
-			#	print "REPLANNING...."
-			#	self.planner.plan(curr_pos, self.T - t)
-			#	endT = time.time()
-			#	print "Replanning took: " + str(endT - startT) + " seconds"
 
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)
