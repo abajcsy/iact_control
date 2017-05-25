@@ -5,6 +5,8 @@ import openravepy
 from openravepy import *
 import time
 
+from catkin.find_in_workspaces import find_in_workspaces
+
 def plotCartesian(env,bodies,coords):
 	"""
 	Plots a single cube point in OpenRAVE at coords(x,y,z) location
@@ -36,18 +38,44 @@ def robotToCartesian(robot):
 
 	return cartesian
 
-env, robot = interact.initialize_empty('jaco_dynamics', empty=True)
-env.Load('{:s}/table.xml'.format(objects_path))
-table = env.GetKinBody('table')
-table.SetTransform(np.array([[1.00000000e+00, -2.79931237e-36,  1.41282351e-14, 1.50902510e-01],
-                             [-2.07944729e-28,  1.00000000e+00,  1.47183799e-14, -1.47385532e-02],
-                             [-1.41282351e-14, -1.47183799e-14,  1.00000000e+00, -1.00134850e-01],
-                             [0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]]))
+def create_table(env):
+	# load table into environment
+	objects_path = find_in_workspaces(
+		    project='interactpy',
+		    path='envdata',
+		    first_match_only=True)[0]
+	env.Load('{:s}/table.xml'.format(objects_path))
+	table = env.GetKinBody('table')
+	table.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
+		                         [0.0, 1.0,  0.0, 0],
+		                         [0.0, 0.0,  1.0, -0.832],
+		                         [0.0, 0.0,  0.0, 1.0]]))
+	color = np.array([0.9, 0.75, 0.75])
+	table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 
+def create_table_mount(env, bodies):
+	# create robot base attachment
+	body = RaveCreateKinBody(env, '')
+	body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
+	body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
+		                         [0.0, 1.0,  0.0, 0],
+		                         [0.0, 0.0,  1.0, -0.032],
+		                         [0.0, 0.0,  0.0, 1.0]]))
+	body.SetName("robot_mount")
+	env.Add(body, True)
+	color = np.array([0.9, 0.58, 0])
+	body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+	bodies.append(body)
+
+env, robot = interact.initialize_empty('jaco_dynamics', empty=True)
 bodies = []
+
+create_table(env)
+create_table_mount(env,bodies)
+
 cartesianDOFs = robotToCartesian(robot)
-for coord in cartesianDOFs:
-	plotCartesian(env, bodies, coord)
+#for coord in cartesianDOFs:
+#	plotCartesian(env, bodies, coord)
 print "cartesian dofs: " + str(cartesianDOFs)
 time.sleep(20)
 

@@ -15,15 +15,11 @@ from openravepy import *
 
 import interactpy
 from interactpy import *
-from util import *
 
 import logging
 import pid
 import copy
 import json
-import util
-
-import sim_robot
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
@@ -62,6 +58,12 @@ class Planner(object):
 
 		# insert any objects you want into environment
 		self.bodies = []
+	
+		# plot the table and table mount
+		self.plotTable()
+		self.plotTableMount()
+
+		# plot obstacles
 		coords = [0.2, 0.2, 0.8]
 		self.plotPoint(coords, 0.2)
 		#coords = [-0.2, 0.2, 0.6]
@@ -97,7 +99,7 @@ class Planner(object):
 
 	def featurize(self, waypts):
 
-		features = [None]*len(self.weights)
+		features = [None, None]
 
 		features[0] = self.velocity_features(waypts)
 
@@ -124,6 +126,7 @@ class Planner(object):
 
 		return dist
 
+
 	def obstacle_cost(self, dof):
 		"""
 		Obstacle cost function that penalizes the robot for being near obstacles.
@@ -141,14 +144,12 @@ class Planner(object):
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
-		# get (x,y,z) coordinates for each robot dof
 		self.robot.SetDOFValues(dof)
 		coords = self.robotToCartesian()
-		epsilon = 0.4
 
-		# one cost per joint (7 total)
 		cost = [0.0]*len(coords)
 		jointIdx = 0
+		epsilon = 0.4
 		for coord in coords:
 			dist = self.D(coord)
 			if dist < 0:
@@ -159,6 +160,7 @@ class Planner(object):
 
 		return cost
 
+
 	def velocity_features(self, waypts):
 		"""
 		Computes total velocity cost over waypoints.
@@ -166,11 +168,13 @@ class Planner(object):
 		"""
 		vel = 0.0
 		for i in range(1,len(waypts)):
-			curr_waypt = waypts[i]
-			prev_waypt = waypts[i-1]
-			vel += np.linalg.norm(curr_waypt - prev_waypt)**2
+			curr = waypts[i]
+			prev = waypts[i-1]
+			vel += np.linalg.norm(curr - prev)**2
 			
 		return vel
+
+
 
 
 	# ---- let's replan a new trajectory ---- #
@@ -182,7 +186,6 @@ class Planner(object):
 		self.curr_waypt_idx = 0
 		self.weights = weights
 		self.trajOpt(start, goal)
-		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 		self.upsample(step_time)
 
 	def upsample(self, step_time):
@@ -194,24 +197,22 @@ class Planner(object):
 		t = self.start_time
 		for i in range(num_waypts):
 
-			if t == self.final_time:
+			if t >= self.final_time:
 				
 				waypts_time[i] = self.final_time
-				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1,:]
+				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
 
 			else:
 
 				deltaT = t - self.start_time
-				lower_waypt_idx = int(deltaT/self.step_time_plan)
-				lower_waypt = self.waypts_plan[lower_waypt_idx,:]
-				higher_waypt = self.waypts_plan[lower_waypt_idx + 1,:]
+				prev_idx = int(deltaT/self.step_time_plan)
+				prev = self.waypts_plan[prev_idx]
+				next = self.waypts_plan[prev_idx + 1]
 
 				waypts_time[i] = t
-				waypts[i,:] = lower_waypt+((t-lower_waypt_idx*self.step_time_plan)/self.step_time_plan)*(higher_waypt-lower_waypt)
+				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
 
 			t += step_time
-			if t > self.final_time:
-				t = self.final_time
 
 		self.step_time = step_time
 		self.num_waypts = num_waypts
@@ -228,29 +229,25 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), padding, 1)
 		self.robot.SetDOFValues(aug_start)
 
-		n_waypoints = 10
-		w_length = self.weights[0]
-		w_collision = self.weights[1]
-
+		self.num_waypts_plan = 10
 		if self.waypts_plan == None:
 			#if no plan, straight line
-			init_waypts = np.zeros((n_waypoints,7))
-			for count in range(n_waypoints):
-				init_waypts[count,:] = start + count/(n_waypoints - 1.0)*(goal - start)
+			init_waypts = np.zeros((self.num_waypts_plan,7))
+			for count in range(self.num_waypts_plan):
+				init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
 		else:
 			#if is plan, use previous as initial plan
 			init_waypts = self.waypts_plan 
-		self.num_waypts_plan = n_waypoints
-
+		
 		request = {
 			"basic_info": {
-				"n_steps": n_waypoints,
+				"n_steps": self.num_waypts_plan,
 				"manip" : "j2s7s300"
 			},
 			"costs": [
 			{
 				"type": "joint_vel",
-				"params": {"coeffs": [w_length]}
+				"params": {"coeffs": [self.weights[0]]}
 			}
 			,
 			#{
@@ -274,15 +271,17 @@ class Planner(object):
 		}
 
 		s = json.dumps(request)
-		prob = trajoptpy.ConstructProblem(s, self.env) #maybe we could get useful stuff from prob? some object?
+		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		# add custom cost functions
 		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
 			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
 
-		result = trajoptpy.OptimizeProblem(prob) #can use result to check our own rolled functions?
+		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
+		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
+
 
 
 	# ---- let's find the target position ---- #
@@ -292,33 +291,27 @@ class Planner(object):
 		Gets the next desired position along trajectory
 		by interpolating between waypoints given the current t.
 		"""
-		target_pos = self.waypts[0]
-		if self.num_waypts >= 2:
-			for i in range(self.num_waypts-1):
-				if curr_time > self.waypts_time[i] and curr_time < self.waypts_time[i+1]:
-					prev = self.waypts[i]
-					next = self.waypts[i+1]
-					ti = self.waypts_time[i]
-					ti1 = self.waypts_time[i+1]
-					deltaT = ti1 - ti
-					theta = (next - prev)*((curr_time-ti)/deltaT) + prev
-					target_pos = theta
-					self.curr_waypt_idx = i+1
-					break
-				elif curr_time == self.waypts_time[i]:
-					target_pos = self.waypts[i]		
-					self.curr_waypt_idx = i
-					break
+
+		if curr_time >= self.final_time:
+
+			self.curr_waypt_idx = self.num_waypts - 1
+			target_pos = self.waypt[self.curr_waypt_idx]
+
 		else:
-			print "ONLY ONE WAYPT, CAN'T INTERPOLATE."
-	
-		if curr_time > self.final_time:
-			print "TIME IS UP. GOING TO FINAL WAYPOINT."
-			target_pos = self.waypts[self.num_waypts-1]	
-			self.curr_waypt_idx = self.num_waypts-1
+
+			deltaT = curr_time - self.start_time
+			self.curr_waypt_idx = int(deltaT/self.step_time)
+			prev = self.waypts[self.curr_waypt_idx]
+			next = self.waypts[self.curr_waypt_idx + 1]
+			ti = self.waypts_time[self.curr_waypt_idx]
+			tf = self.waypts_time[self.curr_waypt_idx + 1]
+			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
 
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
+
+
+
 
 
 	# ---- let's deform the trajectory ---- #
@@ -352,6 +345,9 @@ class Planner(object):
 		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
 		return True
+
+
+
 
 
 	# ------- Plotting & Conversion Utils ------- #
@@ -398,6 +394,41 @@ class Planner(object):
 			self.env.Add(body, True)
 			body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 			self.bodies.append(body)
+
+	def plotTable(self):
+		"""
+		Plots the robot table in OpenRAVE.
+		"""
+		# load table into environment
+		objects_path = find_in_workspaces(
+				project='interactpy',
+				path='envdata',
+				first_match_only=True)[0]
+		self.env.Load('{:s}/table.xml'.format(objects_path))
+		table = self.env.GetKinBody('table')
+		table.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
+				                     [0.0, 1.0,  0.0, 0],
+				                     [0.0, 0.0,  1.0, -0.832],
+				                     [0.0, 0.0,  0.0, 1.0]]))
+		color = np.array([0.9, 0.75, 0.75])
+		table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+
+	def plotTableMount(self):
+		"""
+		Plots the robot table mount in OpenRAVE.
+		"""
+		# create robot base attachment
+		body = RaveCreateKinBody(env, '')
+		body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
+		body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
+				                     [0.0, 1.0,  0.0, 0],
+				                     [0.0, 0.0,  1.0, -0.032],
+				                     [0.0, 0.0,  0.0, 1.0]]))
+		body.SetName("robot_mount")
+		env.Add(body, True)
+		color = np.array([0.9, 0.58, 0])
+		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+		self.bodies.append(body)
 
 	def executePathSim(self):
 		"""
