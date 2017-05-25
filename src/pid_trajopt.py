@@ -43,7 +43,7 @@ place = [141.437,88.246,207.993,126.772,-59.245,133.204,375.599]
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
-INTERACTION_TORQUE_THRESHOLD = 8.0
+INTERACTION_TORQUE_THRESHOLD = 10.0
 
 class PIDVelJaco(object): 
 	"""
@@ -80,10 +80,10 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 50.0
+		self.T = 5.0
 
 		# initialize trajectory weights
-		self.weights = [1, 0]
+		self.weights = [1, 1]
 
 		start = np.array(place)*(math.pi/180.0)
 		goal = np.array(pick)*(math.pi/180.0)
@@ -180,7 +180,7 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			self.planner.jainThing(torque_curr)
+			#self.planner.jainThing(torque_curr)
 			#self.weights[1] += 0.05
 			#self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 			#print "I just replanned??"

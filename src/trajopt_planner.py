@@ -21,6 +21,8 @@ import pid
 import copy
 import json
 
+from catkin.find_in_workspaces import find_in_workspaces
+
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
 class Planner(object):
@@ -62,10 +64,11 @@ class Planner(object):
 		# plot the table and table mount
 		self.plotTable()
 		self.plotTableMount()
+		self.plotLaptop()
 
 		# plot obstacles
 		coords = [0.2, 0.2, 0.8]
-		self.plotPoint(coords, 0.2)
+		#self.plotPoint(coords, 0.2)
 		#coords = [-0.2, 0.2, 0.6]
 		#self.plotPoint(coords, 0.1)
 
@@ -106,14 +109,14 @@ class Planner(object):
 		features[1] = [0.0]*(len(waypts)-1)
 		for index in range(1,len(waypts)):
 			dof = waypts[index]
-			features[1][index-1] = sum(self.obstacle_features(dof))
+			features[1][index-1] = sum(self.obstacle_features7DOF(dof))
 
 		return features
 
 
 	# ---- custom cost functions ---- #
 
-	def D(self, coord):
+	def D(self, coord, xyz=True):
 		"""
 		Computes euclidian distance from current coord = (x,y,z)
 		to a circular obstacle.
@@ -121,6 +124,10 @@ class Planner(object):
 
 		obstacle_coords = np.array([0.2, 0.2, 0.8])
 		obstacle_radius = 0.2
+
+		if xyz is False:
+			obstacle_coords = np.array([0.2, 0.2])
+			coord = coord[0:2]
 
 		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
 
@@ -132,15 +139,43 @@ class Planner(object):
 		Obstacle cost function that penalizes the robot for being near obstacles.
 		From CHOMP algorithm (Zucker, 2013).
 		"""
-		
-		cost = self.obstacle_features(dof)
-		for jointIdx in range(7):
-			cost[jointIdx] *= self.weights[1]
+		cost = self.obstacle_featuresEE(dof)
+		#cost = self.obstacle_features7DOF(dof)
+		#for jointIdx in range(len(cost)):
+		cost *= self.weights[1]
+		return cost
+
+	def obstacle_featuresEE(self, dof):
+		"""
+		Computes distance to obstacle for only end-effector
+		"""
+		print "dof: " + str(dof)
+		if len(dof) < 10:
+			padding = np.array([0,0,0])
+			dof = np.append(dof.reshape(7), padding, 1)
+		self.robot.SetDOFValues(dof)
+		coords = self.robotToCartesian()
+		EEcoord = coords[6]
+
+		cost = 0.0
+		epsilon = 0.4
+
+		dist = self.D(EEcoord,xyz=False)
+		if dist < 0:
+			cost = -dist + 1/(2 * epsilon)
+		elif 0 < dist <= epsilon:
+			cost = 1/(2 * epsilon) * (dist - epsilon)**2			
+
 		return cost
 
 
-	def obstacle_features(self, dof):
 
+	def obstacle_features7DOF(self, dof):
+		"""
+		Computes distance to obstacle for each of the 7 dofs
+		"""
+
+		print "dof: " + str(dof)
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
@@ -151,7 +186,7 @@ class Planner(object):
 		jointIdx = 0
 		epsilon = 0.4
 		for coord in coords:
-			dist = self.D(coord)
+			dist = self.D(coord,xyz=True)
 			if dist < 0:
 				cost[jointIdx] = -dist + 1/(2 * epsilon)
 			elif 0 < dist <= epsilon:
@@ -250,13 +285,13 @@ class Planner(object):
 				"params": {"coeffs": [self.weights[0]]}
 			}
 			,
-			#{
-			#	"type": "collision",
-			#	"params": {
-			#	"coeffs": [w_collision],
-			#	"dist_pen": [0.5]
-			#	},
-			#}
+			{
+				"type": "collision",
+				"params": {
+				"coeffs": [self.weights[1]],
+				"dist_pen": [0.5]
+				},
+			}
 			],
 			"constraints": [
 			{
@@ -274,6 +309,10 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		# add custom cost functions
+		#for t in range(1,self.num_waypts_plan): 
+			# use numerical method 
+			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+
 		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
 			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
@@ -295,7 +334,7 @@ class Planner(object):
 		if curr_time >= self.final_time:
 
 			self.curr_waypt_idx = self.num_waypts - 1
-			target_pos = self.waypt[self.curr_waypt_idx]
+			target_pos = self.waypts[self.curr_waypt_idx]
 
 		else:
 
@@ -345,9 +384,6 @@ class Planner(object):
 		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
 		return True
-
-
-
 
 
 	# ------- Plotting & Conversion Utils ------- #
@@ -406,8 +442,8 @@ class Planner(object):
 				first_match_only=True)[0]
 		self.env.Load('{:s}/table.xml'.format(objects_path))
 		table = self.env.GetKinBody('table')
-		table.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
-				                     [0.0, 1.0,  0.0, 0],
+		table.SetTransform(np.array([[0.0, 1.0,  0.0, 0],
+	  								 [1.0, 0.0,  0.0, 0],
 				                     [0.0, 0.0,  1.0, -0.832],
 				                     [0.0, 0.0,  0.0, 1.0]]))
 		color = np.array([0.9, 0.75, 0.75])
@@ -418,17 +454,38 @@ class Planner(object):
 		Plots the robot table mount in OpenRAVE.
 		"""
 		# create robot base attachment
-		body = RaveCreateKinBody(env, '')
+		body = RaveCreateKinBody(self.env, '')
 		body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
 		body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
 				                     [0.0, 1.0,  0.0, 0],
 				                     [0.0, 0.0,  1.0, -0.032],
 				                     [0.0, 0.0,  0.0, 1.0]]))
 		body.SetName("robot_mount")
-		env.Add(body, True)
+		self.env.Add(body, True)
 		color = np.array([0.9, 0.58, 0])
 		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 		self.bodies.append(body)
+
+	def plotLaptop(self):
+		"""
+		Plots the robot table mount in OpenRAVE.
+		"""
+		# create robot base attachment
+		body = RaveCreateKinBody(self.env, '')
+		#12 x 9 x 1 in, 0.3048 x 0.2286 x 0.0254 m
+		# divide by 2: 0.1524 x 0.1143 x 0.0127
+		#20 in from robot base
+		body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
+		body.SetTransform(np.array([[1.0, 0.0,  0.0, -0.508],
+				                     [0.0, 1.0,  0.0, 0],
+				                     [0.0, 0.0,  1.0, -0.032],
+				                     [0.0, 0.0,  0.0, 1.0]]))
+		body.SetName("laptop")
+		self.env.Add(body, True)
+		color = np.array([0, 0, 0])
+		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+		self.bodies.append(body)
+
 
 	def executePathSim(self):
 		"""
@@ -443,10 +500,12 @@ class Planner(object):
 		curr_pos 	7x1 vector of current joint angles (degrees)
 		----
 		"""
-		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0],curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
-		self.curr_pos = pos
 
-		self.robot.SetDOFValues(self.curr_pos)
+		#TODO: for some reason the 3rd joint is always off by pi in OpenRAVE -- add pi to it as a hack for now
+		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0]+math.pi,curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
+		
+		print "pos: " + str(pos)
+		self.robot.SetDOFValues(pos)
 
 if __name__ == '__main__':
 
