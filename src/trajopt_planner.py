@@ -51,6 +51,8 @@ class Planner(object):
 		self.weights = None
 		self.waypts_prev = None
 
+		self.prev_EEcoord = [0.0]*3
+
 		# ---- OpenRAVE Initialization ---- #
 		
 		# initialize openrave and compute waypts
@@ -122,12 +124,13 @@ class Planner(object):
 		to a circular obstacle.
 		"""
 
-		obstacle_coords = np.array([0.2, 0.2, 0.8])
-		obstacle_radius = 0.2
+		obstacle_coords = np.array([-0.508, 0.0, 0.0])
+		obstacle_radius = 0.15
+		self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
 
 		if xyz is False:
 			obstacle_radius = 0.15
-			obstacle_coords = np.array([-0.508, 0])
+			obstacle_coords = np.array([-0.508, 0.0])
 			#self.plotPoint([-0.508, 0, 0], obstacle_radius)
 			coord = coord[0:2]
 
@@ -151,9 +154,11 @@ class Planner(object):
 		"""
 		Computes distance to obstacle for only end-effector
 		"""
+
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
+			dof[2] = dof[2]+math.pi
 		self.robot.SetDOFValues(dof)
 		coords = self.robotToCartesian()
 		EEcoord = coords[6]
@@ -161,11 +166,14 @@ class Planner(object):
 		cost = 0.0
 		epsilon = 0.4
 
-		dist = self.D(EEcoord,xyz=False)
+		dist = self.D(EEcoord,xyz=True)
 		if dist < 0:
 			cost = -dist + 1/(2 * epsilon)
 		elif 0 < dist <= epsilon:
 			cost = 1/(2 * epsilon) * (dist - epsilon)**2
+
+		cost = cost * np.linalg.norm(EEcoord - self.prev_EEcoord)
+		self.prev_EEcoord = EEcoord
 
 		return cost
 
@@ -178,6 +186,7 @@ class Planner(object):
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
+			dof[2] = dof[2]+math.pi
 		self.robot.SetDOFValues(dof)
 		coords = self.robotToCartesian()
 
@@ -209,8 +218,6 @@ class Planner(object):
 		return vel
 
 
-
-
 	# ---- let's replan a new trajectory ---- #
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
@@ -221,6 +228,7 @@ class Planner(object):
 		self.weights = weights
 		self.trajOpt(start, goal)
 		self.upsample(step_time)
+		self.plotTraj()
 
 	def upsample(self, step_time):
 
@@ -263,7 +271,7 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), padding, 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 20
+		self.num_waypts_plan = 10
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
@@ -287,7 +295,7 @@ class Planner(object):
 			{
 				"type": "collision",
 				"params": {
-				"coeffs": [0],
+				"coeffs": [1],
 				"dist_pen": [0.5]
 				},
 			}
@@ -308,9 +316,9 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		# add custom cost functions
-		for t in range(1,self.num_waypts_plan): 
+		#for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
-			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+		#	prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
@@ -403,13 +411,14 @@ class Planner(object):
 	def plotTraj(self):
 		"""
 		Plots the best trajectory found or planned
-
-		TODO: traj_pts plotting is deprecated!
 		"""
-		for body in self.bodies:
-			self.env.Remove(body)
 
-		self.bodies += plotWaypoints(self.env, self.robot, self.waypts)
+		for waypoint in self.waypts:
+			dof = np.append(waypoint, np.array([1, 1, 1]))
+			dof[2] += math.pi
+			self.robot.SetDOFValues(dof)
+			coord = self.robotToCartesian()
+			self.plotPoint(coord[6], 0.01)
 
 	def plotPoint(self, coords, size=0.1):
 		"""
@@ -421,7 +430,7 @@ class Planner(object):
 			body = RaveCreateKinBody(self.env, '')
 			body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
 						  size, size, size]]))
-			body.SetName(str(len(self.bodies)))
+			body.SetName("pt"+str(len(self.bodies)))
 			self.env.Add(body, True)
 			body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 			self.bodies.append(body)
@@ -486,7 +495,11 @@ class Planner(object):
 		"""
 		Executes in the planned trajectory in simulation
 		"""
-		self.robot.ExecutePath(self.waypts)
+		traj = RaveCreateTrajectory(self.env,'')
+		traj.Init(self.robot.GetActiveConfigurationSpecification())
+		for i in range(len(self.waypts)):
+			traj.Insert(i, self.waypts[i])
+		self.robot.ExecutePath(traj)
 
 	def update_curr_pos(self, curr_pos):
 		"""
@@ -499,7 +512,6 @@ class Planner(object):
 		#TODO: for some reason the 3rd joint is always off by pi in OpenRAVE -- add pi to it as a hack for now
 		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0]+math.pi,curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
 		
-		print "pos: " + str(pos)
 		self.robot.SetDOFValues(pos)
 
 if __name__ == '__main__':

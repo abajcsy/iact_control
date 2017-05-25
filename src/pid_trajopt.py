@@ -80,10 +80,10 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 5.0
+		self.T = 10.0
 
 		# initialize trajectory weights
-		self.weights = [1, 100]
+		self.weights = [1, 0]
 
 		start = np.array(place)*(math.pi/180.0)
 		goal = np.array(pick)*(math.pi/180.0)
@@ -92,7 +92,7 @@ class PIDVelJaco(object):
 		
 		# create the trajopt planner and plan from start to goal
 		self.planner = trajopt_planner.Planner()
-		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
+		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
