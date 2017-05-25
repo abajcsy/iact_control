@@ -50,6 +50,9 @@ class Planner(object):
 		self.waypts = None
 		self.waypts_time = None
 
+		self.weights = None
+		self.waypts_prev = None
+
 		# ---- OpenRAVE Initialization ---- #
 		
 		# initialize openrave and compute waypts
@@ -59,8 +62,8 @@ class Planner(object):
 
 		# insert any objects you want into environment
 		self.bodies = []
-		coords = [0.0, 0.4, 0.8]
-		self.plotPoint(coords, 0.1)
+		coords = [0.2, 0.2, 0.8]
+		self.plotPoint(coords, 0.2)
 		#coords = [-0.2, 0.2, 0.6]
 		#self.plotPoint(coords, 0.1)
 
@@ -75,7 +78,7 @@ class Planner(object):
 
 		# ---- DEFORMATION Initialization ---- #
 
-		self.alpha = 0.0#-0.005
+		self.alpha = -0.005
 		self.n = 5 # number of waypoints that will be deformed
 		self.A = np.zeros((self.n+2, self.n)) 
 		np.fill_diagonal(self.A, 1)
@@ -88,6 +91,24 @@ class Planner(object):
 		Uh[0] = 1
 		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
 
+
+
+	# ---- featurization functions ---- #
+
+	def featurize(self, waypts):
+
+		features = [None]*len(self.weights)
+
+		features[0] = self.velocity_features(waypts)
+
+		features[1] = [0.0]*(len(waypts)-1)
+		for index in range(1,len(waypts)):
+			dof = waypts[index]
+			features[1][index-1] = sum(self.obstacle_features(dof))
+
+		return features
+
+
 	# ---- custom cost functions ---- #
 
 	def D(self, coord):
@@ -96,8 +117,8 @@ class Planner(object):
 		to a circular obstacle.
 		"""
 
-		obstacle_coords = np.array([0.0, 0.4, 0.8])
-		obstacle_radius = 0.1
+		obstacle_coords = np.array([0.2, 0.2, 0.8])
+		obstacle_radius = 0.2
 
 		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
 
@@ -108,6 +129,15 @@ class Planner(object):
 		Obstacle cost function that penalizes the robot for being near obstacles.
 		From CHOMP algorithm (Zucker, 2013).
 		"""
+		
+		cost = self.obstacle_features(dof)
+		for jointIdx in range(7):
+			cost[jointIdx] *= self.weights[1]
+		return cost
+
+
+	def obstacle_features(self, dof):
+
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
@@ -124,10 +154,24 @@ class Planner(object):
 			if dist < 0:
 				cost[jointIdx] = -dist + 1/(2 * epsilon)
 			elif 0 < dist <= epsilon:
-				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2
+				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2			
 			jointIdx += 1
 
 		return cost
+
+	def velocity_features(self, waypts):
+		"""
+		Computes total velocity cost over waypoints.
+		Returns scalar cost. 
+		"""
+		vel = 0.0
+		for i in range(1,len(waypts)):
+			curr_waypt = waypts[i]
+			prev_waypt = waypts[i-1]
+			vel += np.linalg.norm(curr_waypt - prev_waypt)**2
+			
+		return vel
+
 
 	# ---- let's replan a new trajectory ---- #
 
@@ -136,7 +180,8 @@ class Planner(object):
 		self.start_time = start_time
 		self.final_time = final_time
 		self.curr_waypt_idx = 0
-		self.trajOpt(start, goal, weights)
+		self.weights = weights
+		self.trajOpt(start, goal)
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 		self.upsample(step_time)
 
@@ -173,7 +218,7 @@ class Planner(object):
 		self.waypts = waypts
 		self.waypts_time = waypts_time
 
-	def trajOpt(self, start, goal, weights):
+	def trajOpt(self, start, goal):
 		"""
 		Computes a plan from start to goal taking T total time.
 		"""
@@ -184,8 +229,8 @@ class Planner(object):
 		self.robot.SetDOFValues(aug_start)
 
 		n_waypoints = 10
-		w_length = weights[0]
-		w_collision = weights[1]
+		w_length = self.weights[0]
+		w_collision = self.weights[1]
 
 		if self.waypts_plan == None:
 			#if no plan, straight line
@@ -207,7 +252,7 @@ class Planner(object):
 				"type": "joint_vel",
 				"params": {"coeffs": [w_length]}
 			}
-			#,
+			,
 			#{
 			#	"type": "collision",
 			#	"params": {
@@ -232,7 +277,7 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env) #maybe we could get useful stuff from prob? some object?
 
 		# add custom cost functions
-		for t in range(1,self.num_waypts_plan):    
+		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
 			prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
 
@@ -278,11 +323,27 @@ class Planner(object):
 
 	# ---- let's deform the trajectory ---- #
 
+	def jainThing(self, u_h):
+		
+		if self.deform(u_h):
+			new_features = self.featurize(self.waypts)
+			old_features = self.featurize(self.waypts_prev)
+			Phi_p = [new_features[0], sum(new_features[1])]
+			Phi = [old_features[0], sum(old_features[1])]
+			print "here is the change in features"
+			print Phi_p
+			print Phi
+			#print new_features - new_features
+			
+		
+
 
 	def deform(self, u_h):
 
 		if (self.curr_waypt_idx + self.n) >= self.num_waypts:
-			return
+			return False
+
+		self.waypts_prev = copy.deepcopy(self.waypts)
 
 		gamma = np.zeros((self.n,7))
 		for joint in range(7):
@@ -290,6 +351,7 @@ class Planner(object):
 
 		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
+		return True
 
 
 	# ------- Plotting & Conversion Utils ------- #

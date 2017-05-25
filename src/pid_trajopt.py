@@ -248,10 +248,10 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			#self.planner.deform(torque_curr)
-			self.weights[1] += 0.05
-			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
-			print "I just replanned??"
+			self.planner.jainThing(torque_curr)
+			#self.weights[1] += 0.05
+			#self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
+			#print "I just replanned??"
 
 	def joint_state_callback(self, msg):
 		"""		
