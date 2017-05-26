@@ -82,6 +82,9 @@ class PIDVelJaco(object):
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
+		# start admittance control mode
+		self.start_admittance_mode()
+
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
@@ -156,6 +159,35 @@ class PIDVelJaco(object):
 
 			self.vel_pub.publish(ros_utils.cmd_to_JointVelocityMsg(self.cmd))
 			r.sleep()
+
+		# end admittance control mode
+		self.stop_admittance_mode()
+
+	def start_admittance_mode(self):
+		"""
+		Switches Jaco to admittance-control mode using ROS services
+		"""
+		service_address = prefix+'/in/start_force_control'	
+		rospy.wait_for_service(service_address)
+		try:
+			startForceControl = rospy.ServiceProxy(service_address, Start)
+			startForceControl()           
+		except rospy.ServiceException, e:
+			print "Service call failed: %s"%e
+			return None	
+
+	def stop_admittance_mode(self):
+		"""
+		Switches Jaco to position-control mode using ROS services
+		"""
+		service_address = prefix+'/in/stop_force_control'	
+		rospy.wait_for_service(service_address)
+		try:
+			stopForceControl = rospy.ServiceProxy(service_address, Stop)
+			stopForceControl()           
+		except rospy.ServiceException, e:
+			print "Service call failed: %s"%e
+			return None	
 
 	def PID_control(self, pos):
 		"""
