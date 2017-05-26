@@ -98,12 +98,12 @@ bodies = []
 
 viewer = env.GetViewer()
 viewer.SetSize(1000,1000)
-#viewer.SetCamera([
-#	[0.,  0., -1., 0.462949],
-#	[1.,  0.,  0., 2.192697],
-#	[0., -1.,  1., 0.936772],
-#	[0.,  0.,  0., 1.]])
-#viewer.SetBkgndColor([0.8,0.8,0.8])
+cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
+       [ 0.02495645,  0.68697757, -0.72624996,  2.04733515],
+       [ 0.04076329, -0.72657133, -0.68588079,  1.67818344],
+       [ 0.        ,  0.        ,  0.        ,  1.        ]])
+viewer.SetCamera(cam_params)
+viewer.SetBkgndColor([0.8,0.8,0.8])
 
 
 plotTable(env)
@@ -114,6 +114,6 @@ cartesianDOFs = robotToCartesian(robot)
 #for coord in cartesianDOFs:
 #	plotCartesian(env, bodies, coord)
 print "cartesian dofs: " + str(cartesianDOFs)
-time.sleep(20)
+time.sleep(60)
 
 

@@ -14,16 +14,15 @@ import or_trajopt
 import openravepy
 from openravepy import *
 
-import interactpy
-from interactpy import *
+#import interactpy
+#from interactpy import *
+
+import openrave_utils
+from openrave_utils import *
 
 import logging
 import pid
 import copy
-
-from catkin.find_in_workspaces import find_in_workspaces
-
-logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
 #Q2: += pi...
 
@@ -69,25 +68,15 @@ class Planner(object):
 		
 		# initialize robot and empty environment
 		model_filename = 'jaco_dynamics'
-		self.env, self.robot = interact.initialize_empty(model_filename, empty=True)
+		self.env, self.robot = initialize(model_filename)
 
 		# insert any objects you want into environment
 		self.bodies = []
 	
 		# plot the table and table mount
-		self.plotTable()
-		self.plotTableMount()
-		self.plotLaptop()
-
-		# set the perspective
-		viewer = self.env.GetViewer()
-		viewer.SetSize(1000,1000)
-		viewer.SetCamera([
-			[0.,  0., -1., 1.],
-			[1.,  0.,  0., 0.],
-			[0., -1.,  1., 0.],
-			[0.,  0.,  0., 1.]])
-		viewer.SetBkgndColor([0.8,0.8,0.8])
+		plotTable(self.env)
+		plotTableMount(self.env,self.bodies)
+		plotLaptop(self.env,self.bodies)
 
 		# ---- DEFORMATION Initialization ---- #
 
@@ -148,7 +137,7 @@ class Planner(object):
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
 		self.robot.SetDOFValues(waypt)
-		coords = self.robotToCartesian()
+		coords = robotToCartesian(self.robot)
 		EEcoord_z = coords[6][2]
 		return -EEcoord_z
 	
@@ -168,7 +157,7 @@ class Planner(object):
 	#	if len(waypt) < 10:
 	#		waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 	#	self.robot.SetDOFValues(waypt)
-	#	coords = self.robotToCartesian()
+	#	coords = robotToCartesian(self.robot)
 	#	EEcoord_xy = coords[6][0:2]
 	#	return -np.linalg.norm(EEcoord_xy - laptop_xy)
 
@@ -284,8 +273,6 @@ class Planner(object):
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
 		return True
 	
-	
-
 	# ---- replanning, upsampling, and interpolating ---- #
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
@@ -299,7 +286,7 @@ class Planner(object):
 		self.weights = weights
 		self.trajOpt(start, goal)
 		self.upsample(step_time)
-		self.plotTraj()
+		plotTraj(self.env,self.robot,self.bodies,self.waypts)
 
 	def upsample(self, step_time):
 		"""
@@ -346,180 +333,6 @@ class Planner(object):
 			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos		
-		
-		
-
-	def replan(self, start, goal, weights, start_time, final_time, step_time):
-		"""
-		replan the trajectory from start to goal given weights.
-		input trajectory parameters, update raw and upsampled trajectories
-		"""
-		self.start_time = start_time
-		self.final_time = final_time
-		self.curr_waypt_idx = 0
-		self.weights = weights
-		self.trajOpt(start, goal)
-		self.upsample(step_time)
-		self.plotTraj()
-
-	def upsample(self, step_time):
-		"""
-		put waypoints along trajectory at step_time increments.
-		input desired time increment, update upsampled trajectory
-		"""
-		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
-		waypts = np.zeros((num_waypts,7))
-		waypts_time = [None]*num_waypts
-		
-		t = self.start_time
-		for i in range(num_waypts):
-			if t >= self.final_time:
-				waypts_time[i] = self.final_time
-				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
-			else:
-				deltaT = t - self.start_time
-				prev_idx = int(deltaT/self.step_time_plan)
-				prev = self.waypts_plan[prev_idx]
-				next = self.waypts_plan[prev_idx + 1]
-				waypts_time[i] = t
-				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
-			t += step_time
-		self.step_time = step_time
-		self.num_waypts = num_waypts
-		self.waypts = waypts
-		self.waypts_time = waypts_time
-
-	def interpolate(self, curr_time):
-		"""
-		Gets the next desired position along trajectory
-		by interpolating between waypoints given the current t.
-		"""
-		if curr_time >= self.final_time:
-			self.curr_waypt_idx = self.num_waypts - 1
-			target_pos = self.waypts[self.curr_waypt_idx]
-		else:
-			deltaT = curr_time - self.start_time
-			self.curr_waypt_idx = int(deltaT/self.step_time)
-			prev = self.waypts[self.curr_waypt_idx]
-			next = self.waypts[self.curr_waypt_idx + 1]
-			ti = self.waypts_time[self.curr_waypt_idx]
-			tf = self.waypts_time[self.curr_waypt_idx + 1]
-			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
-		target_pos = np.array(target_pos).reshape((7,1))
-		return target_pos
-
-
-	# ------- Plotting & Conversion Utils ------- #
-
-	def robotToCartesian(self):
-		"""
-		Converts robot configuration into a list of cartesian 
-		(x,y,z) coordinates for each of the robot's links.
-		------
-		Returns: 7-dimensional list of 3 xyz values
-		"""
-		links = self.robot.GetLinks()
-		cartesian = [None]*7
-		i = 0
-		for i in range(1,8):
-			link = links[i] 
-			tf = link.GetTransform()
-			cartesian[i-1] = tf[0:3,3]
-
-		return cartesian
-
-	def plotTraj(self):
-		"""
-		Plots the best trajectory found or planned
-		"""
-
-		for waypoint in self.waypts:
-			dof = np.append(waypoint, np.array([1, 1, 1]))
-			dof[2] += math.pi
-			self.robot.SetDOFValues(dof)
-			coord = self.robotToCartesian()
-			self.plotPoint(coord[6], 0.01)
-
-	def plotPoint(self, coords, size=0.1):
-		"""
-		Plots a single cube point in OpenRAVE at coords(x,y,z) location
-		"""
-		with self.env:
-			color = np.array([0, 1, 0])
-
-			body = RaveCreateKinBody(self.env, '')
-			body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
-						  size, size, size]]))
-			body.SetName("pt"+str(len(self.bodies)))
-			self.env.Add(body, True)
-			body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
-			self.bodies.append(body)
-
-	def plotTable(self):
-		"""
-		Plots the robot table in OpenRAVE.
-		"""
-		# load table into environment
-		objects_path = find_in_workspaces(
-				project='interactpy',
-				path='envdata',
-				first_match_only=True)[0]
-		self.env.Load('{:s}/table.xml'.format(objects_path))
-		table = self.env.GetKinBody('table')
-		table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.31], #should be negative 1?
-	  								 [1.0, 0.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.932],
-				                     [0.0, 0.0,  0.0, 1.0]]))
-		color = np.array([0.9, 0.75, 0.75])
-		table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
-
-	def plotTableMount(self):
-		"""
-		Plots the robot table mount in OpenRAVE.
-		"""
-		# create robot base attachment
-		body = RaveCreateKinBody(self.env, '')
-		body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
-		body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
-				                     [0.0, 1.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.132],
-				                     [0.0, 0.0,  0.0, 1.0]]))
-		body.SetName("robot_mount")
-		self.env.Add(body, True)
-		color = np.array([0.9, 0.58, 0])
-		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
-		self.bodies.append(body)
-
-	def plotLaptop(self):
-		"""
-		Plots the robot table mount in OpenRAVE.
-		"""
-		# create robot base attachment
-		body = RaveCreateKinBody(self.env, '')
-		#12 x 9 x 1 in, 0.3048 x 0.2286 x 0.0254 m
-		# divide by 2: 0.1524 x 0.1143 x 0.0127
-		#20 in from robot base
-		body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-		body.SetTransform(np.array([[1.0, 0.0,  0.0, -0.68],
-				                     [0.0, 1.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.132],
-				                     [0.0, 0.0,  0.0, 1.0]]))
-		body.SetName("laptop")
-		self.env.Add(body, True)
-		color = np.array([0, 0, 0])
-		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
-		self.bodies.append(body)
-
-
-	def executePathSim(self):
-		"""
-		Executes in the planned trajectory in simulation
-		"""
-		traj = RaveCreateTrajectory(self.env,'')
-		traj.Init(self.robot.GetActiveConfigurationSpecification())
-		for i in range(len(self.waypts)):
-			traj.Insert(i, self.waypts[i])
-		self.robot.ExecutePath(traj)
 
 	def update_curr_pos(self, curr_pos):
 		"""
@@ -548,9 +361,8 @@ if __name__ == '__main__':
 	weights = [1,1]
 
 	trajplanner.replan(s, g, weights, 0.0, T, 1.0)
-	trajplanner.executePathSim()
-	time.sleep(20)
-
+	#executePathSim(trajplanner.env,trajplanner.robot,trajplanner.waypts)
+	time.sleep(50)
 
 	"""
 	def D(self, coord, xyz=True):
@@ -584,7 +396,7 @@ if __name__ == '__main__':
 			dof = np.append(dof.reshape(7), padding, 1)
 			dof[2] = dof[2]+math.pi
 		self.robot.SetDOFValues(dof)
-		coords = self.robotToCartesian()
+		coords = robotToCartesian(self.robot)
 
 		cost = [0.0]*len(coords)
 		jointIdx = 0
