@@ -41,6 +41,10 @@ candlestick_pos = [180.0]*7
 pick = [286.778,100.915,159.529,77.129,122.341,109.705,345.556]
 place = [141.437,88.246,207.993,126.772,-59.245,133.204,375.599]
 
+
+pick2 = [330.7, 267.6, 354.7, 107.2, 152.6, 255.6, 358.0]
+place2 = [398.4, 267.3, 362.5, 115.4, 224.7, 247.4, 320.1]
+
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
 INTERACTION_TORQUE_THRESHOLD = 10.0
@@ -80,13 +84,13 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 10.0
+		self.T = 20.0
 
 		# initialize trajectory weights
 		self.weights = [1, 0]
 
-		start = np.array(place)*(math.pi/180.0)
-		goal = np.array(pick)*(math.pi/180.0)
+		start = np.array(pick2)*(math.pi/180.0)
+		goal = np.array(place2)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
 		
@@ -180,10 +184,11 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			#self.planner.jainThing(torque_curr)
+			#self.planner.deform(torque_curr)
+			self.weights = self.planner.jainThing(torque_curr)
 			#self.weights[1] += 0.05
-			#self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
-			#print "I just replanned??"
+			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
+			print "I just replanned??"
 
 	def joint_angles_callback(self, msg):
 		"""

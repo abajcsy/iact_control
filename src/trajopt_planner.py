@@ -48,7 +48,7 @@ class Planner(object):
 		self.waypts = None
 		self.waypts_time = None
 
-		self.weights = None
+		self.weights = [1, 0]
 		self.waypts_prev = None
 
 		self.prev_EEcoord = [0.0]*3
@@ -85,7 +85,7 @@ class Planner(object):
 
 		# ---- DEFORMATION Initialization ---- #
 
-		self.alpha = -0.005
+		self.alpha = -0.01
 		self.n = 5 # number of waypoints that will be deformed
 		self.A = np.zeros((self.n+2, self.n)) 
 		np.fill_diagonal(self.A, 1)
@@ -111,12 +111,18 @@ class Planner(object):
 		features[1] = [0.0]*(len(waypts)-1)
 		for index in range(1,len(waypts)):
 			dof = waypts[index]
-			features[1][index-1] = sum(self.obstacle_features7DOF(dof))
+			features[1][index-1] = self.obstacle_featuresEE(dof)
 
 		return features
 
 
 	# ---- custom cost functions ---- #
+
+	#without any custom cost fine
+	#custom cost fine yesterday ==> previous cost function is fine
+	
+	#custom cost does not work alone ==> previous cost function works alone but slow
+	#custom cost does not work with collision cost ==> previous cost function works together but slow
 
 	def D(self, coord, xyz=True):
 		"""
@@ -126,12 +132,12 @@ class Planner(object):
 
 		obstacle_coords = np.array([-0.508, 0.0, 0.0])
 		obstacle_radius = 0.15
-		self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
+		#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
 
 		if xyz is False:
 			obstacle_radius = 0.15
 			obstacle_coords = np.array([-0.508, 0.0])
-			#self.plotPoint([-0.508, 0, 0], obstacle_radius)
+			#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
 			coord = coord[0:2]
 
 		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
@@ -161,21 +167,9 @@ class Planner(object):
 			dof[2] = dof[2]+math.pi
 		self.robot.SetDOFValues(dof)
 		coords = self.robotToCartesian()
-		EEcoord = coords[6]
+		EEcoord_z = coords[6][2] #distance to table
 
-		cost = 0.0
-		epsilon = 0.4
-
-		dist = self.D(EEcoord,xyz=True)
-		if dist < 0:
-			cost = -dist + 1/(2 * epsilon)
-		elif 0 < dist <= epsilon:
-			cost = 1/(2 * epsilon) * (dist - epsilon)**2
-
-		cost = cost * np.linalg.norm(EEcoord - self.prev_EEcoord)
-		self.prev_EEcoord = EEcoord
-
-		return cost
+		return -EEcoord_z
 
 
 
@@ -222,12 +216,14 @@ class Planner(object):
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
 
+		plan_start_time = time.time()
 		self.start_time = start_time
 		self.final_time = final_time
 		self.curr_waypt_idx = 0
 		self.weights = weights
 		self.trajOpt(start, goal)
 		self.upsample(step_time)
+		print "my planning time: " + str(time.time() - plan_start_time)
 		self.plotTraj()
 
 	def upsample(self, step_time):
@@ -266,6 +262,8 @@ class Planner(object):
 		Computes a plan from start to goal taking T total time.
 		"""
 
+		print "self.weights: " + str(self.weights)
+
 		if len(start) < 10:
 			padding = np.array([0,0,0])
 			aug_start = np.append(start.reshape(7), padding, 1)
@@ -291,14 +289,14 @@ class Planner(object):
 				"type": "joint_vel",
 				"params": {"coeffs": [self.weights[0]]}
 			}
-			,
-			{
-				"type": "collision",
-				"params": {
-				"coeffs": [1],
-				"dist_pen": [0.5]
-				},
-			}
+			#,
+			#{
+			#	"type": "collision",
+			#	"params": {
+			#	"coeffs": [1],
+			#	"dist_pen": [0.5]
+			#	},
+			#}
 			],
 			"constraints": [
 			{
@@ -316,9 +314,10 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		# add custom cost functions
-		#for t in range(1,self.num_waypts_plan): 
+		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
-		#	prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+			prob.AddCost(self.obstacle_cost, [(t,j) for j in range(7)], "obstacleC%i"%t) #why f?
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
@@ -363,14 +362,27 @@ class Planner(object):
 		if self.deform(u_h):
 			new_features = self.featurize(self.waypts)
 			old_features = self.featurize(self.waypts_prev)
-			Phi_p = [new_features[0], sum(new_features[1])]
-			Phi = [old_features[0], sum(old_features[1])]
+			Phi_p = np.array([new_features[0], sum(new_features[1])])
+			Phi = np.array([old_features[0], sum(old_features[1])])
+
+			update = Phi_p - Phi
 			print "here is the change in features"
-			print Phi_p
-			print Phi
-			#print new_features - new_features
-			
-		
+			print "new features: " + str(Phi_p)
+			print "old features: " + str(Phi)	
+			print "feature diff: " + str(update) 
+	
+			curr_weight = self.weights[1] - 0.1*update[1]
+			if curr_weight > 1:
+				curr_weight = 1
+			elif curr_weight < 0:
+				curr_weight = 0
+
+			print "here is the new weight for table:"
+			print curr_weight
+
+			self.weights[1] = curr_weight
+			return self.weights
+		#replan with 
 
 
 	def deform(self, u_h):
@@ -387,6 +399,8 @@ class Planner(object):
 		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
 		return True
+
+
 
 
 	# ------- Plotting & Conversion Utils ------- #
@@ -446,9 +460,9 @@ class Planner(object):
 				first_match_only=True)[0]
 		self.env.Load('{:s}/table.xml'.format(objects_path))
 		table = self.env.GetKinBody('table')
-		table.SetTransform(np.array([[0.0, 1.0,  0.0, 0],
+		table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.31],
 	  								 [1.0, 0.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.832],
+				                     [0.0, 0.0,  1.0, -0.932],
 				                     [0.0, 0.0,  0.0, 1.0]]))
 		color = np.array([0.9, 0.75, 0.75])
 		table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
@@ -462,7 +476,7 @@ class Planner(object):
 		body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
 		body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
 				                     [0.0, 1.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.032],
+				                     [0.0, 0.0,  1.0, -0.132],
 				                     [0.0, 0.0,  0.0, 1.0]]))
 		body.SetName("robot_mount")
 		self.env.Add(body, True)
@@ -480,9 +494,9 @@ class Planner(object):
 		# divide by 2: 0.1524 x 0.1143 x 0.0127
 		#20 in from robot base
 		body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-		body.SetTransform(np.array([[1.0, 0.0,  0.0, -0.508],
+		body.SetTransform(np.array([[1.0, 0.0,  0.0, -0.68],
 				                     [0.0, 1.0,  0.0, 0],
-				                     [0.0, 0.0,  1.0, -0.032],
+				                     [0.0, 0.0,  1.0, -0.132],
 				                     [0.0, 0.0,  0.0, 1.0]]))
 		body.SetName("laptop")
 		self.env.Add(body, True)
