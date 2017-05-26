@@ -27,8 +27,7 @@ def initialize(model_filename='jaco', envXML=None):
 	urdf_uri = 'package://iact_control/src/data/'+model_filename+'.urdf'
 	srdf_uri = 'package://iact_control/src/data/'+model_filename+'.srdf'
 	or_urdf = openravepy.RaveCreateModule(env, 'urdf')
-	robot_name = or_urdf.SendCommand(
-		'load {:s} {:s}'.format(urdf_uri, srdf_uri))
+	robot_name = or_urdf.SendCommand('load {:s} {:s}'.format(urdf_uri, srdf_uri))
 	robot = env.GetRobot(robot_name)
 	bind_subclass(robot, ArchieRobot)
 
@@ -65,7 +64,7 @@ def robotToCartesian(robot):
 
 	return cartesian
 
-def plotTraj(env,robot,bodies,waypts):
+def plotTraj(env,robot,bodies,waypts, color=[0, 1, 0]):
 	"""
 	Plots the best trajectory found or planned
 	"""
@@ -74,21 +73,20 @@ def plotTraj(env,robot,bodies,waypts):
 		dof[2] += math.pi
 		robot.SetDOFValues(dof)
 		coord = robotToCartesian(robot)
-		plotPoint(env, bodies, coord[6], 0.01)
+		plotPoint(env, bodies, coord[6], 0.005, color)
 
-def plotPoint(env, bodies, coords, size=0.1):
+def plotPoint(env, bodies, coords, size=0.1, color=[0, 1, 0]):
 	"""
 	Plots a single cube point in OpenRAVE at coords(x,y,z) location
 	"""
 	with env:
-		color = np.array([0, 1, 0])
-
+		c = np.array(color)
 		body = RaveCreateKinBody(env, '')
 		body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
 					  size, size, size]]))
 		body.SetName("pt"+str(len(bodies)))
 		env.Add(body, True)
-		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c)
 		bodies.append(body)
 
 def plotTable(env):
@@ -136,7 +134,7 @@ def plotLaptop(env,bodies):
 	# divide by 2: 0.1524 x 0.1143 x 0.0127
 	#20 in from robot base
 	body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-	body.SetTransform(np.array([[1.0, 0.0,  0.0, -1.2858/2],
+	body.SetTransform(np.array([[1.0, 0.0,  0.0, -1.3858/2],
 			                     [0.0, 1.0,  0.0, 0],
 			                     [0.0, 0.0,  1.0, -0.1016],
 			                     [0.0, 0.0,  0.0, 1.0]]))

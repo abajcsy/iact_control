@@ -87,7 +87,7 @@ class PIDVelJaco(object):
 		self.T = 20.0
 
 		# initialize trajectory weights
-		self.weights = [1,0]
+		self.weights = [1,0,0]
 
 		start = np.array(pick2)*(math.pi/180.0)
 		goal = np.array(place2)*(math.pi/180.0)
@@ -186,7 +186,6 @@ class PIDVelJaco(object):
 			print "--- INTERACTION ---"
 			#self.planner.deform(torque_curr)
 			self.weights = self.planner.jainThing(torque_curr)
-			#self.weights[1] += 0.05
 			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 			print "I just replanned??"
 

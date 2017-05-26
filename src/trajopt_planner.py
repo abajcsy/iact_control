@@ -27,11 +27,8 @@ import copy
 
 #Q2: += pi...
 
-#C2: the rotation in plottable is not in SO(3)?
-#C3: add vertical offset to table_feature
-#C4: should be a better way of holding the undeformed trajectory
 
-#openRAVE visualization
+
 #jain/deformation algorithms
 
 class Planner(object):
@@ -60,7 +57,7 @@ class Planner(object):
 		self.step_time = None
 		self.waypts_time = None
 
-		self.weights = [1, 0]
+		self.weights = [1, 1, 1]
 		self.waypts_prev = None
 
 		# ---- OpenRAVE Initialization ---- #
@@ -100,11 +97,13 @@ class Planner(object):
 		computs the user-defined features for a given trajectory.
 		input trajectory, output list of feature values
 		"""
-		features = [None, None]
+		features = [None]*len(self.weights)
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
+		features[2] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
 			features[1][index] = self.table_features(waypts[index+1])
+			features[2][index] = self.laptop_features(waypts[index+1])
 		return features
 	
 	def velocity_features(self, waypts):
@@ -138,7 +137,8 @@ class Planner(object):
 		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
 		EEcoord_z = coords[6][2]
-		return -EEcoord_z
+		# have to subtract the table offset (0.1016)
+		return -EEcoord_z - 0.1016 
 	
 	def table_cost(self, waypt):
 		"""
@@ -148,26 +148,27 @@ class Planner(object):
 		feature = self.table_features(waypt)
 		return feature*self.weights[1]
 
-	#def laptop_features(self, waypt):
-	#	"""
-	#	determines the distance between the end-effector and the laptop.
-	#	input waypoint, output scalar feature
-	#	"""
-	#	if len(waypt) < 10:
-	#		waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-	#		waypt[2] += math.pi
-	#	self.robot.SetDOFValues(waypt)
-	#	coords = robotToCartesian(self.robot)
-	#	EEcoord_xy = coords[6][0:2]
-	#	return -np.linalg.norm(EEcoord_xy - laptop_xy)
+	def laptop_features(self, waypt):
+		"""
+		determines the distance between the end-effector and the laptop.
+		input waypoint, output scalar feature
+		"""
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		coords = robotToCartesian(self.robot)
+		EEcoord_xy = coords[6][0:2]
+		laptop_xy = np.array([-1.3858/2, 0])
+		return -np.linalg.norm(EEcoord_xy - laptop_xy)
 
-	#def laptop_cost(self, waypt):
-	#	"""
-	#	computs the cost based on distance from end-effector to laptop.
-	#	input waypoint, output scalar cost
-	#	"""
-	#	feature = self.laptop_features(waypt)
-	#	return feature*self.weights[2]
+	def laptop_cost(self, waypt):
+		"""
+		computs the cost based on distance from end-effector to laptop.
+		input waypoint, output scalar cost
+		"""
+		feature = self.laptop_features(waypt)
+		return feature*self.weights[2]
 	
 	
 	# ---- here's trajOpt --- #
@@ -177,8 +178,10 @@ class Planner(object):
 		computes a plan from start to goal using optimizer.
 		updates the waypts_plan
 		"""
+		#start[2] += math.pi
 		if len(start) < 10:
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
+#			aug_start[2] += math.pi
 		self.robot.SetDOFValues(aug_start)
 
 		self.num_waypts_plan = 6
@@ -222,6 +225,8 @@ class Planner(object):
 			# use numerical method 
 			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
+		for t in range(1,self.num_waypts_plan): 
+			prob.AddCost(self.laptop_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
@@ -235,8 +240,8 @@ class Planner(object):
 		if self.deform(u_h):
 			new_features = self.featurize(self.waypts)
 			old_features = self.featurize(self.waypts_prev)
-			Phi_p = np.array([new_features[0], sum(new_features[1])])
-			Phi = np.array([old_features[0], sum(old_features[1])])
+			Phi_p = np.array([new_features[0], sum(new_features[1]), sum(new_features[2])])
+			Phi = np.array([old_features[0], sum(old_features[1]), sum(old_features[2])])
 
 			update = Phi_p - Phi
 			print "here is the change in features"
@@ -245,32 +250,40 @@ class Planner(object):
 			print "feature diff: " + str(update) 
 	
 			curr_weight = self.weights[1] - 0.1*update[1]
-			if curr_weight > 1:
-				curr_weight = 1
-			elif curr_weight < 0:
-				curr_weight = 0
+			if curr_weight > 1.0:
+				curr_weight = 1.0
+			elif curr_weight < 0.0:
+				curr_weight = 0.0
 
-			print "here is the new weight for table:"
+			curr_weight2 = self.weights[2] - 0.1*update[2]
+			if curr_weight2 > 2.0:
+				curr_weight2 = 2.0
+			elif curr_weight2 < -1.0:
+				curr_weight2 = -1.0
+
+			print "here is the new weight for table and laptop:"
 			print curr_weight
+			print curr_weight2
 
 			self.weights[1] = curr_weight
+			self.weights[2] = curr_weight2
 			return self.weights
-		#replan with 
 
 
 	def deform(self, u_h):
-
+		"""
+		deform the next n waypoints of the upsampled trajectory
+		updates the upsampled trajectory, stores old trajectory
+		"""
 		deform_waypt_idx = self.curr_waypt_idx + 1
 		if (deform_waypt_idx + self.n) > self.num_waypts:
 			return False
-
 		self.waypts_prev = copy.deepcopy(self.waypts)
-
 		gamma = np.zeros((self.n,7))
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
-
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
+		plotTraj(self.env, self.robot, self.bodies, self.waypts, [0, 1, 0])
 		return True
 	
 
@@ -287,7 +300,7 @@ class Planner(object):
 		self.weights = weights
 		self.trajOpt(start, goal)
 		self.upsample(step_time)
-		plotTraj(self.env,self.robot,self.bodies,self.waypts)
+		plotTraj(self.env,self.robot,self.bodies,self.waypts, [0, 0, 1])
 
 	def upsample(self, step_time):
 		"""
