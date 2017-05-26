@@ -26,10 +26,11 @@ import copy
 
 
 #Q2: += pi...
+#we can do distance to table well
+#we cant seem to do any laptop features/interesting trajectories
 
 
-
-#jain/deformation algorithms
+#jain/deformation algorithms still needs to be refined
 
 class Planner(object):
 	"""
@@ -100,10 +101,10 @@ class Planner(object):
 		features = [None]*len(self.weights)
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
-		features[2] = [0.0]*(len(waypts)-1)
+#		features[2] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
 			features[1][index] = self.table_features(waypts[index+1])
-			features[2][index] = self.laptop_features(waypts[index+1])
+#			features[2][index] = self.laptop_features(waypts[index+1])
 		return features
 	
 	def velocity_features(self, waypts):
@@ -148,27 +149,27 @@ class Planner(object):
 		feature = self.table_features(waypt)
 		return feature*self.weights[1]
 
-	def laptop_features(self, waypt):
+#	def laptop_features(self, waypt):
 		"""
 		determines the distance between the end-effector and the laptop.
 		input waypoint, output scalar feature
 		"""
-		if len(waypt) < 10:
-			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-			waypt[2] += math.pi
-		self.robot.SetDOFValues(waypt)
-		coords = robotToCartesian(self.robot)
-		EEcoord_xy = coords[6][0:2]
-		laptop_xy = np.array([-1.3858/2, 0])
-		return -np.linalg.norm(EEcoord_xy - laptop_xy)
+#		if len(waypt) < 10:
+#			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+#			waypt[2] += math.pi
+#		self.robot.SetDOFValues(waypt)
+#		coords = robotToCartesian(self.robot)
+#		EEcoord_xy = coords[6][0:2]
+#		laptop_xy = np.array([-1.3858, 0]) #divide by 2?
+#		return -np.linalg.norm(EEcoord - laptop_xy)
 
-	def laptop_cost(self, waypt):
+#	def laptop_cost(self, waypt):
 		"""
 		computs the cost based on distance from end-effector to laptop.
 		input waypoint, output scalar cost
 		"""
-		feature = self.laptop_features(waypt)
-		return feature*self.weights[2]
+#		feature = self.laptop_features(waypt)
+#		return feature*self.weights[2]
 	
 	
 	# ---- here's trajOpt --- #
@@ -181,10 +182,9 @@ class Planner(object):
 		#start[2] += math.pi
 		if len(start) < 10:
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
-#			aug_start[2] += math.pi
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 6
+		self.num_waypts_plan = 5
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
@@ -202,7 +202,7 @@ class Planner(object):
 			"costs": [
 			{
 				"type": "joint_vel",
-				"params": {"coeffs": [1]}
+				"params": {"coeffs": [self.weights[0]]}
 			}
 			],
 			"constraints": [
@@ -225,8 +225,6 @@ class Planner(object):
 			# use numerical method 
 			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
-		for t in range(1,self.num_waypts_plan): 
-			prob.AddCost(self.laptop_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
@@ -235,38 +233,25 @@ class Planner(object):
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
 
-	def jainThing(self, u_h):
+	def learnWeights(self, u_h):
 		
 		if self.deform(u_h):
 			new_features = self.featurize(self.waypts)
 			old_features = self.featurize(self.waypts_prev)
-			Phi_p = np.array([new_features[0], sum(new_features[1]), sum(new_features[2])])
-			Phi = np.array([old_features[0], sum(old_features[1]), sum(old_features[2])])
+			Phi_p = np.array([new_features[0], sum(new_features[1])])
+			Phi = np.array([old_features[0], sum(old_features[1])])
 
 			update = Phi_p - Phi
-			print "here is the change in features"
-			print "new features: " + str(Phi_p)
-			print "old features: " + str(Phi)	
-			print "feature diff: " + str(update) 
-	
 			curr_weight = self.weights[1] - 0.1*update[1]
-			if curr_weight > 1.0:
-				curr_weight = 1.0
+			if curr_weight > 10.0:
+				curr_weight = 10.0
 			elif curr_weight < 0.0:
 				curr_weight = 0.0
 
-			curr_weight2 = self.weights[2] - 0.1*update[2]
-			if curr_weight2 > 2.0:
-				curr_weight2 = 2.0
-			elif curr_weight2 < -1.0:
-				curr_weight2 = -1.0
-
-			print "here is the new weight for table and laptop:"
+			print "here is the new weight for the table:"
 			print curr_weight
-			print curr_weight2
 
 			self.weights[1] = curr_weight
-			self.weights[2] = curr_weight2
 			return self.weights
 
 
@@ -283,7 +268,7 @@ class Planner(object):
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
-		plotTraj(self.env, self.robot, self.bodies, self.waypts, [0, 1, 0])
+		#plotTraj(self.env, self.robot, self.bodies, self.waypts, [0, 1, 0])
 		return True
 	
 

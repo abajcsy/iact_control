@@ -43,11 +43,12 @@ place = [141.437,88.246,207.993,126.772,-59.245,133.204,375.599]
 
 
 pick2 = [330.7, 267.6, 354.7, 107.2, 152.6, 255.6, 358.0]
+pick3 = [-67.503+360.0,198.902,370.293,33.813,166.103,293.615,309.642]
 place2 = [398.4, 267.3, 362.5, 115.4, 224.7, 247.4, 320.1]
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
-INTERACTION_TORQUE_THRESHOLD = 10.0
+INTERACTION_TORQUE_THRESHOLD = 8.0
 
 class PIDVelJaco(object): 
 	"""
@@ -84,10 +85,10 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 20.0
+		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = [1,0,0]
+		self.weights = [1,0]
 
 		start = np.array(pick2)*(math.pi/180.0)
 		goal = np.array(place2)*(math.pi/180.0)
@@ -174,7 +175,10 @@ class PIDVelJaco(object):
 		print "Current torque: " + str(torque_curr)
 		interaction = False
 		for i in range(7):
-			if np.fabs(torque_curr[i][0]) > INTERACTION_TORQUE_THRESHOLD:
+			THRESHOLD = INTERACTION_TORQUE_THRESHOLD
+			if i > 3:
+				THRESHOLD = 1.0
+			if np.fabs(torque_curr[i][0]) > THRESHOLD:
 				interaction = True
 			else:
 				# zero out torques below threshold for cleanliness
@@ -185,9 +189,8 @@ class PIDVelJaco(object):
 		if interaction:
 			print "--- INTERACTION ---"
 			#self.planner.deform(torque_curr)
-			self.weights = self.planner.jainThing(torque_curr)
+			self.weights = self.planner.learnWeights(torque_curr)
 			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
-			print "I just replanned??"
 
 	def joint_angles_callback(self, msg):
 		"""
