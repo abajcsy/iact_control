@@ -102,9 +102,9 @@ def plotTable(env):
 			first_match_only=True)[0]
 	env.Load('{:s}/table.xml'.format(objects_path))
 	table = env.GetKinBody('table')
-	table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.31], #should be negative 1?
+	table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.8128/2], #should be negative 1?
   								 [1.0, 0.0,  0.0, 0],
-			                     [0.0, 0.0,  1.0, -0.932],
+			                     [0.0, 0.0,  1.0, -0.1143], #-0.7874
 			                     [0.0, 0.0,  0.0, 1.0]]))
 	color = np.array([0.9, 0.75, 0.75])
 	table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
@@ -115,10 +115,10 @@ def plotTableMount(env,bodies):
 	"""
 	# create robot base attachment
 	body = RaveCreateKinBody(env, '')
-	body.InitFromBoxes(np.array([[0,0,0, 0.14605,0.4001,0.03175]]))
+	body.InitFromBoxes(np.array([[0,0,0, 0.3048/2,0.8128/2,0.1016/2]]))
 	body.SetTransform(np.array([[1.0, 0.0,  0.0, 0],
 			                     [0.0, 1.0,  0.0, 0],
-			                     [0.0, 0.0,  1.0, -0.132],
+			                     [0.0, 0.0,  1.0, -0.1016/2],
 			                     [0.0, 0.0,  0.0, 1.0]]))
 	body.SetName("robot_mount")
 	env.Add(body, True)
@@ -136,9 +136,9 @@ def plotLaptop(env,bodies):
 	# divide by 2: 0.1524 x 0.1143 x 0.0127
 	#20 in from robot base
 	body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-	body.SetTransform(np.array([[1.0, 0.0,  0.0, -0.68],
+	body.SetTransform(np.array([[1.0, 0.0,  0.0, -1.2858/2],
 			                     [0.0, 1.0,  0.0, 0],
-			                     [0.0, 0.0,  1.0, -0.132],
+			                     [0.0, 0.0,  1.0, -0.1016],
 			                     [0.0, 0.0,  0.0, 1.0]]))
 	body.SetName("laptop")
 	env.Add(body, True)

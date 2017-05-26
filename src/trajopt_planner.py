@@ -24,16 +24,15 @@ import logging
 import pid
 import copy
 
+
 #Q2: += pi...
 
-#Q1: why do we use jaco_dynamics and not jaco?
-#Q2: += pi...
-#Q3: what is AddCost doing? Why is it called "f"?
-
-#C1: the openrave perspective could be improved, check our frame
 #C2: the rotation in plottable is not in SO(3)?
 #C3: add vertical offset to table_feature
 #C4: should be a better way of holding the undeformed trajectory
+
+#openRAVE visualization
+#jain/deformation algorithms
 
 class Planner(object):
 	"""
@@ -156,6 +155,7 @@ class Planner(object):
 	#	"""
 	#	if len(waypt) < 10:
 	#		waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+	#		waypt[2] += math.pi
 	#	self.robot.SetDOFValues(waypt)
 	#	coords = robotToCartesian(self.robot)
 	#	EEcoord_xy = coords[6][0:2]
@@ -181,7 +181,7 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 10
+		self.num_waypts_plan = 6
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
@@ -273,6 +273,7 @@ class Planner(object):
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
 		return True
 	
+
 	# ---- replanning, upsampling, and interpolating ---- #
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
@@ -333,6 +334,7 @@ class Planner(object):
 			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos		
+
 
 	def update_curr_pos(self, curr_pos):
 		"""
