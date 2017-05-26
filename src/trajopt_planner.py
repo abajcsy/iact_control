@@ -32,6 +32,7 @@ logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 #C1: the openrave perspective could be improved, check our frame
 #C2: the rotation in plottable is not in SO(3)?
 #C3: add vertical offset to table_feature
+#C4: should be a better way of holding the undeformed trajectory
 
 class Planner(object):
 	"""
@@ -157,6 +158,26 @@ class Planner(object):
 		feature = self.table_features(waypt)
 		return feature*self.weights[1]
 
+	#def laptop_features(self, waypt):
+	#	"""
+	#	determines the distance between the end-effector and the laptop.
+	#	input waypoint, output scalar feature
+	#	"""
+	#	if len(waypt) < 10:
+	#		waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+	#	self.robot.SetDOFValues(waypt)
+	#	coords = self.robotToCartesian()
+	#	EEcoord_xy = coords[6][0:2]
+	#	return -np.linalg.norm(EEcoord_xy - laptop_xy)
+
+	#def laptop_cost(self, waypt):
+	#	"""
+	#	computs the cost based on distance from end-effector to laptop.
+	#	input waypoint, output scalar cost
+	#	"""
+	#	feature = self.laptop_features(waypt)
+	#	return feature*self.weights[2]
+	
 	
 	# ---- here's trajOpt --- #
 		
@@ -248,7 +269,7 @@ class Planner(object):
 
 	def deform(self, u_h):
 
-		if (self.curr_waypt_idx + self.n) >= self.num_waypts:
+		if (self.curr_waypt_idx + self.n) > self.num_waypts:
 			return False
 
 		self.waypts_prev = copy.deepcopy(self.waypts)
@@ -256,9 +277,7 @@ class Planner(object):
 		gamma = np.zeros((self.n,7))
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
-
-		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
-		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
+		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] += gamma
 		return True
 	
 
