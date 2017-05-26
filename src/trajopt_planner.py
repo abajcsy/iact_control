@@ -27,6 +27,10 @@ logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
 #Q2: += pi...
 
+#Q1: why do we use jaco_dynamics and not jaco?
+#Q2: += pi...
+#Q3: what is AddCost doing? Why is it called "f"?
+
 #C1: the openrave perspective could be improved, check our frame
 #C2: the rotation in plottable is not in SO(3)?
 #C3: add vertical offset to table_feature
@@ -276,11 +280,74 @@ class Planner(object):
 		gamma = np.zeros((self.n,7))
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
+
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
 		return True
 	
+	
 
 	# ---- replanning, upsampling, and interpolating ---- #
+
+	def replan(self, start, goal, weights, start_time, final_time, step_time):
+		"""
+		replan the trajectory from start to goal given weights.
+		input trajectory parameters, update raw and upsampled trajectories
+		"""
+		self.start_time = start_time
+		self.final_time = final_time
+		self.curr_waypt_idx = 0
+		self.weights = weights
+		self.trajOpt(start, goal)
+		self.upsample(step_time)
+		self.plotTraj()
+
+	def upsample(self, step_time):
+		"""
+		put waypoints along trajectory at step_time increments.
+		input desired time increment, update upsampled trajectory
+		"""
+		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
+		waypts = np.zeros((num_waypts,7))
+		waypts_time = [None]*num_waypts
+		
+		t = self.start_time
+		for i in range(num_waypts):
+			if t >= self.final_time:
+				waypts_time[i] = self.final_time
+				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
+			else:
+				deltaT = t - self.start_time
+				prev_idx = int(deltaT/self.step_time_plan)
+				prev = self.waypts_plan[prev_idx]
+				next = self.waypts_plan[prev_idx + 1]
+				waypts_time[i] = t
+				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
+			t += step_time
+		self.step_time = step_time
+		self.num_waypts = num_waypts
+		self.waypts = waypts
+		self.waypts_time = waypts_time
+
+	def interpolate(self, curr_time):
+		"""
+		Gets the next desired position along trajectory
+		by interpolating between waypoints given the current t.
+		"""
+		if curr_time >= self.final_time:
+			self.curr_waypt_idx = self.num_waypts - 1
+			target_pos = self.waypts[self.curr_waypt_idx]
+		else:
+			deltaT = curr_time - self.start_time
+			self.curr_waypt_idx = int(deltaT/self.step_time)
+			prev = self.waypts[self.curr_waypt_idx]
+			next = self.waypts[self.curr_waypt_idx + 1]
+			ti = self.waypts_time[self.curr_waypt_idx]
+			tf = self.waypts_time[self.curr_waypt_idx + 1]
+			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
+		target_pos = np.array(target_pos).reshape((7,1))
+		return target_pos		
+		
+		
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
 		"""
@@ -485,9 +552,11 @@ if __name__ == '__main__':
 	time.sleep(20)
 
 
-
 	"""
 	def D(self, coord, xyz=True):
+
+		#Computes euclidian distance from current coord = (x,y,z)
+		#to a circular obstacle.
 
 		obstacle_coords = np.array([-0.508, 0.0, 0.0])
 		obstacle_radius = 0.15
@@ -507,6 +576,9 @@ if __name__ == '__main__':
 	"""
 	def obstacle_features7DOF(self, dof):
 
+		
+		#Computes distance to obstacle for each of the 7 dofs
+		
 		if len(dof) < 10:
 			padding = np.array([0,0,0])
 			dof = np.append(dof.reshape(7), padding, 1)
