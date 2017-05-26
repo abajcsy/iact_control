@@ -4,6 +4,7 @@ from numpy import linspace
 import matplotlib.pyplot as plt
 import time
 import math
+import json
 
 from sympy import symbols
 from sympy import lambdify
@@ -19,11 +20,18 @@ from interactpy import *
 import logging
 import pid
 import copy
-import json
 
 from catkin.find_in_workspaces import find_in_workspaces
 
 logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
+
+#Q1: why do we use jaco_dynamics and not jaco?
+#Q2: += pi...
+#Q3: what is AddCost doing? Why is it called "f"?
+
+#C1: the openrave perspective could be improved, check our frame
+#C2: the rotation in plottable is not in SO(3)?
+#C3: add vertical offset to table_feature
 
 class Planner(object):
 	"""
@@ -34,28 +42,29 @@ class Planner(object):
 	def __init__(self):
 
 		# ---- important internal variables ---- #
-
+		
 		self.start_time = None
 		self.final_time = None
 		self.curr_waypt_idx = None
 
+		# these variables are for trajopt
+		# self.waypts_plan is also treated as the next initial trajectory
 		self.waypts_plan = None
 		self.num_waypts_plan = None
 		self.step_time_plan = None
 
-		self.step_time = None
-		self.num_waypts = None
+		# these variables are for the upsampled trajectory
 		self.waypts = None
+		self.num_waypts = None
+		self.step_time = None
 		self.waypts_time = None
 
 		self.weights = [1, 0]
 		self.waypts_prev = None
 
-		self.prev_EEcoord = [0.0]*3
-
 		# ---- OpenRAVE Initialization ---- #
 		
-		# initialize openrave and compute waypts
+		# initialize robot and empty environment
 		model_filename = 'jaco_dynamics'
 		# model_filename = 'jaco'
 		self.env, self.robot = interact.initialize_empty(model_filename, empty=True)
@@ -68,12 +77,7 @@ class Planner(object):
 		self.plotTableMount()
 		self.plotLaptop()
 
-		# plot obstacles
-		#coords = [0.2, 0.2, 0.8]
-		#self.plotPoint(coords, 0.2)
-		#coords = [-0.2, 0.2, 0.6]
-		#self.plotPoint(coords, 0.1)
-
+		# set the perspective
 		viewer = self.env.GetViewer()
 		viewer.SetSize(1000,1000)
 		viewer.SetCamera([
@@ -99,174 +103,70 @@ class Planner(object):
 		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
 
 
-
-	# ---- featurization functions ---- #
+	# ---- custom feature and cost functions ---- #
 
 	def featurize(self, waypts):
-
+		"""
+		computs the user-defined features for a given trajectory.
+		input trajectory, output list of feature values
+		"""
 		features = [None, None]
-
 		features[0] = self.velocity_features(waypts)
-
 		features[1] = [0.0]*(len(waypts)-1)
-		for index in range(1,len(waypts)):
-			dof = waypts[index]
-			features[1][index-1] = self.obstacle_featuresEE(dof)
-
+		for index in range(0,len(waypts)-1):
+			features[1][index] = self.table_features(waypts[index+1])
 		return features
-
-
-	# ---- custom cost functions ---- #
-
-	#without any custom cost fine
-	#custom cost fine yesterday ==> previous cost function is fine
 	
-	#custom cost does not work alone ==> previous cost function works alone but slow
-	#custom cost does not work with collision cost ==> previous cost function works together but slow
-
-	def D(self, coord, xyz=True):
-		"""
-		Computes euclidian distance from current coord = (x,y,z)
-		to a circular obstacle.
-		"""
-
-		obstacle_coords = np.array([-0.508, 0.0, 0.0])
-		obstacle_radius = 0.15
-		#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
-
-		if xyz is False:
-			obstacle_radius = 0.15
-			obstacle_coords = np.array([-0.508, 0.0])
-			#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
-			coord = coord[0:2]
-
-		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
-
-		return dist
-
-
-	def obstacle_cost(self, dof):
-		"""
-		Obstacle cost function that penalizes the robot for being near obstacles.
-		From CHOMP algorithm (Zucker, 2013).
-		"""
-		cost = self.obstacle_featuresEE(dof)
-		#cost = self.obstacle_features7DOF(dof)
-		#for jointIdx in range(len(cost)):
-		cost *= self.weights[1]
-		return cost
-
-	def obstacle_featuresEE(self, dof):
-		"""
-		Computes distance to obstacle for only end-effector
-		"""
-
-		if len(dof) < 10:
-			padding = np.array([0,0,0])
-			dof = np.append(dof.reshape(7), padding, 1)
-			dof[2] = dof[2]+math.pi
-		self.robot.SetDOFValues(dof)
-		coords = self.robotToCartesian()
-		EEcoord_z = coords[6][2] #distance to table
-
-		return -EEcoord_z
-
-
-
-	def obstacle_features7DOF(self, dof):
-		"""
-		Computes distance to obstacle for each of the 7 dofs
-		"""
-		if len(dof) < 10:
-			padding = np.array([0,0,0])
-			dof = np.append(dof.reshape(7), padding, 1)
-			dof[2] = dof[2]+math.pi
-		self.robot.SetDOFValues(dof)
-		coords = self.robotToCartesian()
-
-		cost = [0.0]*len(coords)
-		jointIdx = 0
-		epsilon = 0.4
-		for coord in coords:
-			dist = self.D(coord,xyz=True)
-			if dist < 0:
-				cost[jointIdx] = -dist + 1/(2 * epsilon)
-			elif 0 < dist <= epsilon:
-				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2			
-			jointIdx += 1
-
-		return cost
-
-
 	def velocity_features(self, waypts):
 		"""
-		Computes total velocity cost over waypoints.
-		Returns scalar cost. 
+		computes total velocity cost over waypoints, confirmed to match trajopt.
+		input trajectory, output scalar feature
 		"""
 		vel = 0.0
 		for i in range(1,len(waypts)):
 			curr = waypts[i]
 			prev = waypts[i-1]
 			vel += np.linalg.norm(curr - prev)**2
-			
 		return vel
+	
+	def velocity_cost(self, waypts):
+		"""
+		computes the total velocity cost.
+		input trajectory, output scalar cost
+		"""
+		feature = self.velocity_features(waypts)
+		return feature*self.weights[0]	
+	
+	def table_features(self, waypt):
+		"""
+		determines the distance between the end-effector and the table.
+		input waypoint, output scalar feature
+		"""
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+		self.robot.SetDOFValues(waypt)
+		coords = self.robotToCartesian()
+		EEcoord_z = coords[6][2]
+		return -EEcoord_z
+	
+	def table_cost(self, waypt):
+		"""
+		computs the cost based on distance from end-effector to table.
+		input waypoint, output scalar cost
+		"""
+		feature = self.table_features(waypt)
+		return feature*self.weights[1]
 
-
-	# ---- let's replan a new trajectory ---- #
-
-	def replan(self, start, goal, weights, start_time, final_time, step_time):
-
-		plan_start_time = time.time()
-		self.start_time = start_time
-		self.final_time = final_time
-		self.curr_waypt_idx = 0
-		self.weights = weights
-		self.trajOpt(start, goal)
-		self.upsample(step_time)
-		print "my planning time: " + str(time.time() - plan_start_time)
-		self.plotTraj()
-
-	def upsample(self, step_time):
-
-		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
-		waypts = np.zeros((num_waypts,7))
-		waypts_time = [None]*num_waypts
-
-		t = self.start_time
-		for i in range(num_waypts):
-
-			if t >= self.final_time:
-				
-				waypts_time[i] = self.final_time
-				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
-
-			else:
-
-				deltaT = t - self.start_time
-				prev_idx = int(deltaT/self.step_time_plan)
-				prev = self.waypts_plan[prev_idx]
-				next = self.waypts_plan[prev_idx + 1]
-
-				waypts_time[i] = t
-				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
-
-			t += step_time
-
-		self.step_time = step_time
-		self.num_waypts = num_waypts
-		self.waypts = waypts
-		self.waypts_time = waypts_time
-
+	
+	# ---- here's trajOpt --- #
+		
 	def trajOpt(self, start, goal):
 		"""
-		Computes a plan from start to goal taking T total time.
+		computes a plan from start to goal using optimizer.
+		updates the waypts_plan
 		"""
-
-		print "self.weights: " + str(self.weights)
-
 		if len(start) < 10:
-			padding = np.array([0,0,0])
-			aug_start = np.append(start.reshape(7), padding, 1)
+			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
 		self.num_waypts_plan = 10
@@ -289,14 +189,6 @@ class Planner(object):
 				"type": "joint_vel",
 				"params": {"coeffs": [self.weights[0]]}
 			}
-			#,
-			#{
-			#	"type": "collision",
-			#	"params": {
-			#	"coeffs": [1],
-			#	"dist_pen": [0.5]
-			#	},
-			#}
 			],
 			"constraints": [
 			{
@@ -317,45 +209,14 @@ class Planner(object):
 		for t in range(1,self.num_waypts_plan): 
 			# use numerical method 
 			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
-			prob.AddCost(self.obstacle_cost, [(t,j) for j in range(7)], "obstacleC%i"%t) #why f?
+			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 
 
-
-	# ---- let's find the target position ---- #
-
-	def interpolate(self, curr_time):
-		"""
-		Gets the next desired position along trajectory
-		by interpolating between waypoints given the current t.
-		"""
-
-		if curr_time >= self.final_time:
-
-			self.curr_waypt_idx = self.num_waypts - 1
-			target_pos = self.waypts[self.curr_waypt_idx]
-
-		else:
-
-			deltaT = curr_time - self.start_time
-			self.curr_waypt_idx = int(deltaT/self.step_time)
-			prev = self.waypts[self.curr_waypt_idx]
-			next = self.waypts[self.curr_waypt_idx + 1]
-			ti = self.waypts_time[self.curr_waypt_idx]
-			tf = self.waypts_time[self.curr_waypt_idx + 1]
-			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
-
-		target_pos = np.array(target_pos).reshape((7,1))
-		return target_pos
-
-
-
-
-
-	# ---- let's deform the trajectory ---- #
+	# ---- here's our algorithms for modifying the trajectory ---- #
 
 	def jainThing(self, u_h):
 		
@@ -399,7 +260,71 @@ class Planner(object):
 		gamma_prev = self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :]
 		self.waypts[self.curr_waypt_idx : self.n + self.curr_waypt_idx, :] = gamma_prev + gamma
 		return True
+	
 
+	# ---- replanning, upsampling, and interpolating ---- #
+
+	def replan(self, start, goal, weights, start_time, final_time, step_time):
+		"""
+		replan the trajectory from start to goal given weights.
+		input trajectory parameters, update raw and upsampled trajectories
+		"""
+		self.start_time = start_time
+		self.final_time = final_time
+		self.curr_waypt_idx = 0
+		self.weights = weights
+		self.trajOpt(start, goal)
+		self.upsample(step_time)
+		self.plotTraj()
+
+	def upsample(self, step_time):
+		"""
+		put waypoints along trajectory at step_time increments.
+		input desired time increment, update upsampled trajectory
+		"""
+		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
+		waypts = np.zeros((num_waypts,7))
+		waypts_time = [None]*num_waypts
+		
+		t = self.start_time
+		for i in range(num_waypts):
+			if t >= self.final_time:
+				waypts_time[i] = self.final_time
+				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
+			else:
+				deltaT = t - self.start_time
+				prev_idx = int(deltaT/self.step_time_plan)
+				prev = self.waypts_plan[prev_idx]
+				next = self.waypts_plan[prev_idx + 1]
+				waypts_time[i] = t
+				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
+			t += step_time
+		self.step_time = step_time
+		self.num_waypts = num_waypts
+		self.waypts = waypts
+		self.waypts_time = waypts_time
+
+	def interpolate(self, curr_time):
+		"""
+		Gets the next desired position along trajectory
+		by interpolating between waypoints given the current t.
+		"""
+		if curr_time >= self.final_time:
+			self.curr_waypt_idx = self.num_waypts - 1
+			target_pos = self.waypts[self.curr_waypt_idx]
+		else:
+			deltaT = curr_time - self.start_time
+			self.curr_waypt_idx = int(deltaT/self.step_time)
+			prev = self.waypts[self.curr_waypt_idx]
+			next = self.waypts[self.curr_waypt_idx + 1]
+			ti = self.waypts_time[self.curr_waypt_idx]
+			tf = self.waypts_time[self.curr_waypt_idx + 1]
+			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
+		target_pos = np.array(target_pos).reshape((7,1))
+		return target_pos		
+		
+		
+	
 
 
 
@@ -460,7 +385,7 @@ class Planner(object):
 				first_match_only=True)[0]
 		self.env.Load('{:s}/table.xml'.format(objects_path))
 		table = self.env.GetKinBody('table')
-		table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.31],
+		table.SetTransform(np.array([[0.0, 1.0,  0.0, -0.31], #should be negative 1?
 	  								 [1.0, 0.0,  0.0, 0],
 				                     [0.0, 0.0,  1.0, -0.932],
 				                     [0.0, 0.0,  0.0, 1.0]]))
@@ -547,3 +472,50 @@ if __name__ == '__main__':
 
 
 
+	"""
+	def D(self, coord, xyz=True):
+		"""
+		Computes euclidian distance from current coord = (x,y,z)
+		to a circular obstacle.
+		"""
+
+		obstacle_coords = np.array([-0.508, 0.0, 0.0])
+		obstacle_radius = 0.15
+		#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
+
+		if xyz is False:
+			obstacle_radius = 0.15
+			obstacle_coords = np.array([-0.508, 0.0])
+			#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
+			coord = coord[0:2]
+
+		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
+
+		return dist
+	"""
+		
+	"""
+	def obstacle_features7DOF(self, dof):
+		"""
+		Computes distance to obstacle for each of the 7 dofs
+		"""
+		if len(dof) < 10:
+			padding = np.array([0,0,0])
+			dof = np.append(dof.reshape(7), padding, 1)
+			dof[2] = dof[2]+math.pi
+		self.robot.SetDOFValues(dof)
+		coords = self.robotToCartesian()
+
+		cost = [0.0]*len(coords)
+		jointIdx = 0
+		epsilon = 0.4
+		for coord in coords:
+			dist = self.D(coord,xyz=True)
+			if dist < 0:
+				cost[jointIdx] = -dist + 1/(2 * epsilon)
+			elif 0 < dist <= epsilon:
+				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2			
+			jointIdx += 1
+
+		return cost
+	"""
