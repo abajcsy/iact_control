@@ -91,7 +91,7 @@ class PIDVelJaco(object):
 		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = [1,0]
+		self.weights = [1,100,100]
 
 		start = np.array(pick2)*(math.pi/180.0)
 		goal = np.array(place2)*(math.pi/180.0)

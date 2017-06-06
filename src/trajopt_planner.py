@@ -60,6 +60,7 @@ class Planner(object):
 
 		self.weights = [1, 1, 1]
 		self.waypts_prev = None
+		self.waypt_prev = None
 
 		# ---- OpenRAVE Initialization ---- #
 		
@@ -135,43 +136,87 @@ class Planner(object):
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
+		#prev_waypt = self.robot.GetDOFValues()
+		#if self.table_counter >= self.num_waypts_plan-2: 
+		#	self.table_counter = 0
+		#if self.table_counter == 0:
+		#	print "wrapping around"
+		#	prev_waypt = np.append(self.start.reshape(7), np.array([0,0,0]), 1)
+
 		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
 		EEcoord_z = coords[6][2]
 		# have to subtract the table offset (0.1016)
-		return -EEcoord_z - 0.1016 
+		#return -EEcoord_z - 0.1016
+		return 1.0 - EEcoord_z
 	
 	def table_cost(self, waypt):
 		"""
 		computs the cost based on distance from end-effector to table.
 		input waypoint, output scalar cost
 		"""
-		feature = self.table_features(waypt)
-		return feature*self.weights[1]
+		mod_index = self.velCount % (16*(self.num_waypts_plan-1))
+		if mod_index < self.num_waypts_plan-1:
+			if mod_index < self.num_waypts_plan-2:
+				self.stored_waypts[mod_index+1] = waypt
+			self.prev_waypt = self.stored_waypts[mod_index]
+		else:
+			self.prev_waypt = self.stored_waypts[int(self.velCountSave/15.0)%(self.num_waypts_plan-1)]
+			self.velCountSave += 1
+		self.velCount += 1
+		
+		print waypt
+		print np.linalg.norm(waypt - self.prev_waypt)
 
-#	def laptop_features(self, waypt):
+		feature = self.table_features(waypt)
+		return feature*self.weights[1]*np.linalg.norm(waypt - self.prev_waypt)
+
+	def laptop_features(self, waypt):
 		"""
 		determines the distance between the end-effector and the laptop.
 		input waypoint, output scalar feature
 		"""
-#		if len(waypt) < 10:
-#			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-#			waypt[2] += math.pi
-#		self.robot.SetDOFValues(waypt)
-#		coords = robotToCartesian(self.robot)
-#		EEcoord_xy = coords[6][0:2]
-#		laptop_xy = np.array([-1.3858, 0]) #divide by 2?
-#		return -np.linalg.norm(EEcoord - laptop_xy)
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		coords = robotToCartesian(self.robot)
+		EEcoord_xy = coords[6][0:2]
+		laptop_xy = np.array([-1.3858/2.0, 0]) #divide by 2?
+		return 1.0 - np.linalg.norm(EEcoord_xy - laptop_xy)
 
-#	def laptop_cost(self, waypt):
+	def laptop_cost(self, waypt):
 		"""
 		computs the cost based on distance from end-effector to laptop.
 		input waypoint, output scalar cost
 		"""
-#		feature = self.laptop_features(waypt)
-#		return feature*self.weights[2]
-	
-	
+		feature = self.laptop_features(waypt)
+		return feature*self.weights[2]*np.linalg.norm(waypt - self.prev_waypt)
+
+	def coffee_constraint(self, waypt):
+		"""
+		determines the x and y components of the tool link transformation vector.
+		input waypoint, output 2x1 feature
+		"""
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		EE_link = self.robot.GetLinks()[7]
+		return EE_link.GetTransform()[:2,:3].dot([1,0,0])
+
+	def coffee_constraint_derivative(self, waypt):
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
+		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
+
+
+			
+
+
 	# ---- here's trajOpt --- #
 		
 	def trajOpt(self, start, goal):
@@ -184,7 +229,7 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 5
+		self.num_waypts_plan = 4
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
@@ -222,9 +267,14 @@ class Planner(object):
 
 		# add custom cost functions
 		for t in range(1,self.num_waypts_plan): 
-			# use numerical method 
-			#prob.AddErrorCost(self.obstacle_cost, [(t,j) for j in range(7)], "ABS", "obstacleC%i"%t)
+			#prob.AddErrorCost(self.table_cost, [(t,j) for j in range(7)], "HINGE", "obstacleC%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "obstacleC%i"%t)
+			prob.AddCost(self.laptop_cost, [(t,j) for j in range(7)], "laptopC%i"%t)
+			#prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
+
+		self.velCount = 0
+		self.velCountSave = 0
+		self.stored_waypts = init_waypts[0:self.num_waypts_plan-1,:]
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
