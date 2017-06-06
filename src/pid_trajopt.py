@@ -20,6 +20,7 @@ import time
 import trajopt_planner
 import traj
 import ros_utils
+import experiment_utils
 
 import kinova_msgs.msg
 import geometry_msgs.msg
@@ -91,7 +92,7 @@ class PIDVelJaco(object):
 		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = [1,100,100]
+		self.weights = [1,1,10]
 
 		start = np.array(pick2)*(math.pi/180.0)
 		goal = np.array(place2)*(math.pi/180.0)
@@ -133,6 +134,10 @@ class PIDVelJaco(object):
 		self.D = d_gain*np.eye(7)
 		self.controller = pid.PID(self.P,self.I,self.D,0,0)
 
+		# ---- Experimental Utils ---- #
+
+		self.expUtil = experiment_utils.ExperimentUtils()
+
 		# ---- ROS Setup ---- #
 
 		rospy.init_node("pid_trajopt")
@@ -162,6 +167,9 @@ class PIDVelJaco(object):
 
 		# end admittance control mode
 		self.stop_admittance_mode()
+
+		# plot experimental data
+		self.expUtil.plot_tauH()
 
 	def start_admittance_mode(self):
 		"""
@@ -220,6 +228,7 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
+			self.expUtil.update_tauH(torque_curr)
 			#self.planner.deform(torque_curr)
 			self.weights = self.planner.learnWeights(torque_curr)
 			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
