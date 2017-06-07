@@ -164,12 +164,17 @@ class PIDVelJaco(object):
 
 			self.vel_pub.publish(ros_utils.cmd_to_JointVelocityMsg(self.cmd))
 			r.sleep()
+		
+		print "----------------------------------"
+
+		# save and plot experimental data
+		print "Saving experimental data to file..."
+		self.expUtil.save_tauH('tauH_data.csv')	
+		self.expUtil.plot_tauH()
+		
 
 		# end admittance control mode
 		self.stop_admittance_mode()
-
-		# plot experimental data
-		self.expUtil.plot_tauH()
 
 	def start_admittance_mode(self):
 		"""
@@ -228,7 +233,9 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			print "--- INTERACTION ---"
-			self.expUtil.update_tauH(torque_curr)
+			if self.reached_start and not self.reached_goal:
+				timestamp = time.time() - self.path_start_T
+				self.expUtil.update_tauH(timestamp, torque_curr)
 			#self.planner.deform(torque_curr)
 			self.weights = self.planner.learnWeights(torque_curr)
 			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
@@ -251,6 +258,11 @@ class PIDVelJaco(object):
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
 		self.update_target_pos(curr_pos)
+
+		# update the experiment utils executed trajectory tracker
+		if self.reached_start and not self.reached_goal:
+			timestamp = time.time() - self.path_start_T
+			self.expUtil.update_traj(timestamp, curr_pos)
 
 		# update cmd from PID based on current position
 		self.cmd = self.PID_control(curr_pos)
@@ -284,6 +296,7 @@ class PIDVelJaco(object):
 			if is_at_start:
 				self.reached_start = True
 				self.path_start_T = time.time()
+				self.expUtil.set_startT(self.path_start_T)
 			else:
 				print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
@@ -315,6 +328,8 @@ class PIDVelJaco(object):
 		else:
 			print "REACHED GOAL! Holding position at goal."
 			self.target_pos = self.goal_pos
+			# TODO: this should only set it once!
+			self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
 	if len(sys.argv) < 5:

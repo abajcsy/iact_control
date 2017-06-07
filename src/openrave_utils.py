@@ -107,6 +107,18 @@ def plotTable(env):
 	color = np.array([0.9, 0.75, 0.75])
 	table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 
+def plotMan(env):
+	"""
+	Plots a human in OpenRAVE.
+	"""
+	# load table into environment
+	objects_path = find_in_workspaces(
+			project='iact_control',
+			path='src/data',
+			first_match_only=True)[0]
+	env.Load('{:s}/manifest.xml'.format(objects_path))
+
+
 def plotTableMount(env,bodies):
 	"""
 	Plots the robot table mount in OpenRAVE.
