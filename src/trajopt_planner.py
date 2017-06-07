@@ -32,6 +32,8 @@ import copy
 
 #jain/deformation algorithms still needs to be refined
 
+
+
 class Planner(object):
 	"""
 	This class plans a trajectory from start to goal 
@@ -58,7 +60,7 @@ class Planner(object):
 		self.step_time = None
 		self.waypts_time = None
 
-		self.weights = [1, 1, 1]
+		self.weights = 1
 		self.waypts_prev = None
 
 		# ---- OpenRAVE Initialization ---- #
@@ -74,6 +76,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
+		plotPoint(self.env,self.bodies,[-1.3858/2.0, 0,0],0.2)
 
 		# ---- DEFORMATION Initialization ---- #
 
@@ -99,13 +102,11 @@ class Planner(object):
 		computs the user-defined features for a given trajectory.
 		input trajectory, output list of feature values
 		"""
-		features = [None]*len(self.weights)
+		features = [None,None]
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
-#		features[2] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
-			features[1][index] = self.table_features(waypts[index+1])
-#			features[2][index] = self.laptop_features(waypts[index+1])
+			features[1][index] = self.laptop_features(waypts[index+1], waypts[index])
 		return features
 	
 	def velocity_features(self, waypts):
@@ -125,58 +126,55 @@ class Planner(object):
 		computes the total velocity cost.
 		input trajectory, output scalar cost
 		"""
-		feature = self.velocity_features(waypts)
-		return feature*self.weights[0]	
+		return self.velocity_features(waypts)
 
 
-	def laptop_features(self, waypt):
+	def laptop_features(self, waypt, prev_waypt):
+
+		laptop_xy = np.array([-1.3858/2.0, 0])
+		vel_mag = np.linalg.norm(waypt - prev_waypt)
+		feature = 0.0
+
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		coords = robotToCartesian(self.robot)
+		EE_coord_xy = coords[6][0:2]
+		
+		dist = np.linalg.norm(EE_coord_xy - laptop_xy) - 0.2
+		if dist < 0:
+			feature = -dist#*vel_mag
+		return feature
+
+	def laptop_cost(self, waypt):
+
+		prev_waypt = waypt[0:7]
+		curr_waypt = waypt[7:14]
+
+		feature = self.laptop_features(curr_waypt, prev_waypt)
+		return feature*self.weights
+
+
+
+
+	# ---- custom constraints --- #
+
+	def table_constraint(self, waypt):
 		"""
-		determines the distance between the end-effector and the laptop.
-		input waypoint, output scalar feature
+
 		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
 		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
-
-
-		cost = [0.0]*len(coords)
-		jointIdx = 0
-		epsilon = 0.4
-		for coord in coords:
-			dist = self.D(coord,xyz=True)
-			if dist < 0:
-				cost[jointIdx] = -dist + 1/(2 * epsilon)
-			elif 0 < dist <= epsilon:
-				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2			
-			jointIdx += 1
-
-		return cost
-
-
-
-		EEcoord_xy = coords[6][0:2]
-		laptop_xy = np.array([-1.3858/2.0, 0]) #divide by 2?
-		return (1.0 - np.linalg.norm(EEcoord_xy - laptop_xy))**2
-
-	def laptop_cost(self, waypt):
-		"""
-		computs the cost based on distance from end-effector to laptop.
-		input waypoint, output scalar cost
-		"""
-		prev_waypt = waypt[0:7]
-		curr_waypt = waypt[7:14]
-
-		feature = self.laptop_features(curr_waypt)
-		return feature*self.weights[2]*np.linalg.norm(curr_waypt - prev_waypt)
-
+		EE_coord_z = coords[6][2]
+		if EE_coord_z > 0:
+			EE_coord_z = 0
+		return -EE_coord_z
 
 	def coffee_constraint(self, waypt):
-		"""
-		determines the x and y components of the tool link transformation vector.
-		input waypoint, output 2x1 feature
-		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -192,31 +190,6 @@ class Planner(object):
 		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
 		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
 
-	def table_features(self, waypt):
-		"""
-		determines the distance between the end-effector and the table.
-		input waypoint, output scalar feature
-		"""
-		if len(waypt) < 10:
-			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-			waypt[2] += math.pi
-		self.robot.SetDOFValues(waypt)
-		coords = robotToCartesian(self.robot)
-		EEcoord_z = coords[6][2]
-
-		return (1.0 - EEcoord_z)**2
-	
-	def table_cost(self, waypt):
-		"""
-		computs the cost based on distance from end-effector to table.
-		input waypoint, output scalar cost
-		"""
-		prev_waypt = waypt[0:7]
-		curr_waypt = waypt[7:14]
-
-		feature = self.table_features(curr_waypt)
-		return feature*self.weights[1]*np.linalg.norm(curr_waypt - prev_waypt)
-			
 
 
 	# ---- here's trajOpt --- #
@@ -234,6 +207,14 @@ class Planner(object):
 		if self.waypts_plan == None:
 			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
+			init_waypts[0,:] = start
+			init_waypts[5,:] = goal
+			midpoint = [211.9, 96.0, 205.6, 58.4, 234.8, 292.6, 198.8]
+			midpoint_form = np.array(midpoint)*(math.pi/180.0)
+			init_waypts[1,:] = start
+			init_waypts[2,:] = midpoint_form
+			init_waypts[3,:] = midpoint_form
+			init_waypts[4,:] = goal
 			for count in range(self.num_waypts_plan):
 				init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
 		else:
@@ -248,7 +229,7 @@ class Planner(object):
 			"costs": [
 			{
 				"type": "joint_vel",
-				"params": {"coeffs": [self.weights[0]]}
+				"params": {"coeffs": [1.0]}
 			}
 			],
 			"constraints": [
@@ -268,12 +249,13 @@ class Planner(object):
 
 		# add custom cost functions
 		for t in range(1,self.num_waypts_plan): 
-			#prob.AddErrorCost(self.table_cost, [(t,j) for j in range(7)], "HINGE", "obstacleC%i"%t)
-			prob.AddCost(self.table_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "obstacleC%i"%t)
+			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptopC%i"%t)
 
 		#for t in range(1,self.num_waypts_plan - 1):
-		#	prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
+			#prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
+			#prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "up%i"%t)
+			#prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
@@ -291,7 +273,7 @@ class Planner(object):
 			Phi = np.array([old_features[0], sum(old_features[1])])
 
 			update = Phi_p - Phi
-			curr_weight = self.weights[1] - 0.1*update[1]
+			curr_weight = self.weights - 10.0*update[1]
 			if curr_weight > 10.0:
 				curr_weight = 10.0
 			elif curr_weight < 0.0:
@@ -300,7 +282,7 @@ class Planner(object):
 			print "here is the new weight for the table:"
 			print curr_weight
 
-			self.weights[1] = curr_weight
+			self.weights = curr_weight
 			return self.weights
 
 
@@ -317,7 +299,7 @@ class Planner(object):
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
 		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
-		#plotTraj(self.env, self.robot, self.bodies, self.waypts, [0, 1, 0])
+		plotTraj(self.env, self.robot, self.bodies, self.waypts, [0, 1, 0])
 		return True
 	
 
@@ -413,51 +395,52 @@ if __name__ == '__main__':
 	#executePathSim(trajplanner.env,trajplanner.robot,trajplanner.waypts)
 	time.sleep(50)
 
+	
+
 	"""
-	def D(self, coord, xyz=True):
+	def coffee_constraint(self, waypt):
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		EE_link = self.robot.GetLinks()[7]
+		return EE_link.GetTransform()[:2,:3].dot([1,0,0])
 
-		#Computes euclidian distance from current coord = (x,y,z)
-		#to a circular obstacle.
+	def coffee_constraint_derivative(self, waypt):
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
+		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
 
-		obstacle_coords = np.array([-0.508, 0.0, 0.0])
-		obstacle_radius = 0.15
-		#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
-
-		if xyz is False:
-			obstacle_radius = 0.15
-			obstacle_coords = np.array([-0.508, 0.0])
-			#self.plotPoint([-0.508, 0.0, 0.0], obstacle_radius)
-			coord = coord[0:2]
-
-		dist = np.linalg.norm(coord - obstacle_coords) - obstacle_radius
-
-		return dist
-	"""
-		
-	"""
-	def obstacle_features7DOF(self, dof):
-
-		
-		#Computes distance to obstacle for each of the 7 dofs
-		
-		if len(dof) < 10:
-			padding = np.array([0,0,0])
-			dof = np.append(dof.reshape(7), padding, 1)
-			dof[2] = dof[2]+math.pi
-		self.robot.SetDOFValues(dof)
+	def table_features(self, waypt):
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
+		EEcoord_z = coords[6][2]
 
-		cost = [0.0]*len(coords)
+		return (1.0 - EEcoord_z)**2
+	
+	def table_cost(self, waypt):
+		prev_waypt = waypt[0:7]
+		curr_waypt = waypt[7:14]
+
+		feature = self.table_features(curr_waypt)
+		return feature*self.weights[1]*np.linalg.norm(curr_waypt - prev_waypt)
+
+cost = [0.0]*len(coords)
+		epsilon = 0.025
 		jointIdx = 0
-		epsilon = 0.4
 		for coord in coords:
-			dist = self.D(coord,xyz=True)
+			dist = np.linalg.norm(coord[0:2] - laptop_xy) - 0.15
 			if dist < 0:
-				cost[jointIdx] = -dist + 1/(2 * epsilon)
+				cost[jointIdx] = (-dist + 1/(2 * epsilon))*vel_mag
 			elif 0 < dist <= epsilon:
-				cost[jointIdx] = 1/(2 * epsilon) * (dist - epsilon)**2			
+				cost[jointIdx] = (1/(2 * epsilon) * (dist - epsilon)**2)*vel_mag
 			jointIdx += 1
-
 		return cost
-	"""
 
+	"""	

@@ -39,13 +39,10 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick = [286.778,100.915,159.529,77.129,122.341,109.705,345.556]
-place = [141.437,88.246,207.993,126.772,-59.245,133.204,375.599]
+pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 130.8]
+place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 162.0]
 
 
-pick2 = [330.7, 267.6, 354.7, 107.2, 152.6, 255.6, 358.0]
-pick3 = [-67.503+360.0,198.902,370.293,33.813,166.103,293.615,309.642]
-place2 = [398.4, 267.3, 362.5, 115.4, 224.7, 247.4, 320.1]
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
@@ -92,10 +89,10 @@ class PIDVelJaco(object):
 		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = [1,1,10]
+		self.weights = 0
 
-		start = np.array(pick2)*(math.pi/180.0)
-		goal = np.array(place2)*(math.pi/180.0)
+		start = np.array(pick)*(math.pi/180.0)
+		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
 		
