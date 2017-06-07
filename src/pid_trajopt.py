@@ -39,8 +39,8 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 130.8]
-place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 162.0]
+pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 130.8+90.0]
+place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 162.0+90.0]
 
 
 
@@ -218,7 +218,7 @@ class PIDVelJaco(object):
 		interaction = False
 		for i in range(7):
 			THRESHOLD = INTERACTION_TORQUE_THRESHOLD
-			if i > 3:
+			if self.reached_start and i >= 3:
 				THRESHOLD = 1.0
 			if np.fabs(torque_curr[i][0]) > THRESHOLD:
 				interaction = True
@@ -235,7 +235,7 @@ class PIDVelJaco(object):
 				self.expUtil.update_tauH(timestamp, torque_curr)
 			#self.planner.deform(torque_curr)
 			self.weights = self.planner.learnWeights(torque_curr)
-			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
+			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 
 	def joint_angles_callback(self, msg):
 		"""
