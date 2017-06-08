@@ -64,6 +64,21 @@ def robotToCartesian(robot):
 
 	return cartesian
 
+def manipToCartesian(robot, offset_z):
+	"""
+	Gets center of robot's manipulator in cartesian space
+	------
+	Params: robot object
+			offset in m from the base of the manip to the center
+	Returns: xyz of center of robot manipulator
+	"""
+	links = robot.GetLinks()
+	manipTf = links[7].GetTransform() 
+	rot = manipTf[0:3,0:3]
+	xyz = manipTf[0:3,3]
+	offset = np.array([0,0,offset_z]).T
+	return xyz
+
 def plotTraj(env,robot,bodies,waypts, color=[0, 1, 0]):
 	"""
 	Plots the best trajectory found or planned
@@ -132,6 +147,7 @@ def plotTableMount(env,bodies):
 			                     [0.0, 0.0,  0.0, 1.0]]))
 	body.SetName("robot_mount")
 	env.Add(body, True)
+
 	color = np.array([0.9, 0.58, 0])
 	body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 	bodies.append(body)
@@ -146,7 +162,7 @@ def plotLaptop(env,bodies):
 	# divide by 2: 0.1524 x 0.1143 x 0.0127
 	#20 in from robot base
 	body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-	body.SetTransform(np.array([[1.0, 0.0,  0.0, -1.3858/2],
+	body.SetTransform(np.array([[1.0, 0.0,  0.0, (-1.3858/2 - 0.1)],
 			                     [0.0, 1.0,  0.0, 0],
 			                     [0.0, 0.0,  1.0, -0.1016],
 			                     [0.0, 0.0,  0.0, 1.0]]))

@@ -39,14 +39,19 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 130.8+90.0]
-place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 162.0+90.0]
-
-
+pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 220.8]
+place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 252.0]
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
 INTERACTION_TORQUE_THRESHOLD = 8.0
+
+TABLE_TASK = 0
+LAPTOP_TASK = 1
+COFFEE_TASK = 2
+
+IMPEDANCE = 'A'
+LEARNING = 'B'
 
 class PIDVelJaco(object): 
 	"""
@@ -75,7 +80,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, sim_flag):
+	def __init__(self, p_gain, i_gain, d_gain, task, methodType):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -95,9 +100,15 @@ class PIDVelJaco(object):
 		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
-		
+
+		# task type - table, laptop, or coffee task
+		self.task = task
+
+		# method type - A=IMPEDANCE, B=LEARNING
+		self.methodType = methodType
+
 		# create the trajopt planner and plan from start to goal
-		self.planner = trajopt_planner.Planner()
+		self.planner = trajopt_planner.Planner(self.task)
 		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 
 		# save intermediate target position from degrees (default) to radians 
@@ -165,10 +176,9 @@ class PIDVelJaco(object):
 		print "----------------------------------"
 
 		# save and plot experimental data
-		print "Saving experimental data to file..."
-		self.expUtil.save_tauH('tauH_data.csv')	
-		self.expUtil.plot_tauH()
-		
+		#print "Saving experimental data to file..."
+		#self.expUtil.save_tauH('tauH_data.csv')	
+		#self.expUtil.plot_tauH()
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -214,7 +224,7 @@ class PIDVelJaco(object):
 		# read the current joint torques from the robot
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
-		print "Current torque: " + str(torque_curr)
+		#print "Current torque: " + str(torque_curr)
 		interaction = False
 		for i in range(7):
 			THRESHOLD = INTERACTION_TORQUE_THRESHOLD
@@ -225,7 +235,7 @@ class PIDVelJaco(object):
 			else:
 				# zero out torques below threshold for cleanliness
 				torque_curr[i][0] = 0.0
-		print "Cleaned torque: " + str(torque_curr)
+		#print "Cleaned torque: " + str(torque_curr)
 
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
@@ -233,9 +243,10 @@ class PIDVelJaco(object):
 			if self.reached_start and not self.reached_goal:
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
-			#self.planner.deform(torque_curr)
-			self.weights = self.planner.learnWeights(torque_curr)
-			self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+
+			if self.methodType == LEARNING:
+				self.weights = self.planner.learnWeights(torque_curr)
+				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -249,7 +260,7 @@ class PIDVelJaco(object):
 		curr_pos = curr_pos*(math.pi/180.0)	
 
 		# update the OpenRAVE simulation 
-		self.planner.update_curr_pos(curr_pos)
+		#self.planner.update_curr_pos(curr_pos)
 
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
@@ -329,13 +340,14 @@ class PIDVelJaco(object):
 			self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 5:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, sim_flag."
+	if len(sys.argv) < 6:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, task, methodType."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
-		sim_flag = int(sys.argv[4])
+		task = int(sys.argv[4])
+		methodType = sys.argv[5]
 
-		PIDVelJaco(p_gains,i_gains,d_gains,sim_flag)
+		PIDVelJaco(p_gains,i_gains,d_gains,task,methodType)
 	

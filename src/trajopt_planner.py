@@ -32,7 +32,9 @@ import copy
 
 #jain/deformation algorithms still needs to be refined
 
-
+TABLE_TASK = 0
+LAPTOP_TASK = 1
+COFFEE_TASK = 2
 
 class Planner(object):
 	"""
@@ -40,9 +42,11 @@ class Planner(object):
 	with TrajOpt. 
 	"""
 
-	def __init__(self):
+	def __init__(self, task):
 
 		# ---- important internal variables ---- #
+
+		self.task = task
 
 		self.start_time = None
 		self.final_time = None
@@ -76,7 +80,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
-		#plotPoint(self.env,self.bodies,[-1.3858/2.0, 0,0],0.2)
+		plotPoint(self.env,self.bodies,[-1.3858/2.0 - 0.1, -0.1,0],0.3)
 
 		# ---- DEFORMATION Initialization ---- #
 
@@ -105,9 +109,16 @@ class Planner(object):
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
-			features[1][index] = self.table_features(waypts[index+1])
+			if self.task == TABLE_TASK:
+				features[1][index] = self.table_features(waypts[index+1])
+			elif self.task == LAPTOP_TASK:
+				features[1][index] = self.laptop_features(waypts[index+1],waypts[index])
+			elif self.task == COFFEE_TASK:
+				features[1][index] = self.coffee_features(waypts[index+1])
 		return features
-	
+
+
+
 	def velocity_features(self, waypts):
 		"""
 		computes total velocity cost over waypoints, confirmed to match trajopt.
@@ -129,6 +140,7 @@ class Planner(object):
 		return self.velocity_features(mywaypts)
 
 
+
 	def table_features(self, waypt):
 
 		if len(waypt) < 10:
@@ -145,6 +157,7 @@ class Planner(object):
 		return feature*self.weights
 
 
+
 	def coffee_features(self, waypt):
 
 		if len(waypt) < 10:
@@ -158,16 +171,15 @@ class Planner(object):
 		
 		feature = self.coffee_features(waypt)
 		return feature*self.weights
-	
 
-	
+
 
 	def laptop_features(self, waypt, prev_waypt):
 
 		feature = 0.0
-		NUM_STEPS = 5
-		for step in range(5):
-			inter_waypt = prev_waypt + (1.0*step)/NUM_STEPS*(waypt - prev_waypt)
+		NUM_STEPS = 4
+		for step in range(NUM_STEPS):
+			inter_waypt = prev_waypt + (1.0 + step)/(NUM_STEPS)*(waypt - prev_waypt)
 			feature += self.laptop_dist(inter_waypt)
 		return feature
 
@@ -179,17 +191,18 @@ class Planner(object):
 		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
 		EE_coord_xy = coords[6][0:2]
-		laptop_xy = np.array([-1.3858/2.0, 0])
-		dist = np.linalg.norm(EE_coord_xy - laptop_xy) - 0.2
+		laptop_xy = np.array([-1.3858/2.0 - 0.1, -0.1])
+		dist = np.linalg.norm(EE_coord_xy - laptop_xy) - 0.4
 		if dist > 0:
 			return 0
 		return -dist
-		
 
 	def laptop_cost(self, waypt):
 
-		feature = self.laptop_features(waypt)
-		return feature*self.weights*10
+		prev_waypt = waypt[0:7]
+		curr_waypt = waypt[7:14]
+		feature = self.laptop_features(curr_waypt,prev_waypt)
+		return feature*self.weights
 
 	
 
@@ -208,6 +221,7 @@ class Planner(object):
 		return -EE_coord_z
 
 	def coffee_constraint(self, waypt):
+
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -223,19 +237,7 @@ class Planner(object):
 		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
 		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
 
-	def change_y(self, waypts):
 
-		mywaypts = np.reshape(waypts,(7,self.num_waypts_plan)).T
-		y_error = [None]*self.num_waypts_plan
-		for index in range(self.num_waypts_plan):
-			waypt = mywaypts[index]
-			if len(waypt) < 10:
-				waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-				waypt[2] += math.pi
-			self.robot.SetDOFValues(waypt)
-			coords = robotToCartesian(self.robot)
-			y_error[index] = coords[6][1] - self.y_star[index]
-		return y_error
 
 
 
@@ -250,14 +252,12 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 6
+		self.num_waypts_plan = 5
 		if self.waypts_plan == None:
-			#if no plan, straight line
 			init_waypts = np.zeros((self.num_waypts_plan,7))
 			for count in range(self.num_waypts_plan):
 				init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
 		else:
-			#if is plan, use previous as initial plan
 			init_waypts = self.waypts_plan 
 		
 		request = {
@@ -286,48 +286,73 @@ class Planner(object):
 		s = json.dumps(request)
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
-		#if self.waypts != None:
-		#	prob.AddConstraint(self.change_y, [(t,j) for j in range(7) for t in range(self.num_waypts_plan)], "EQ", "change_y%i"%t)
-
-		# add custom cost functions
 		for t in range(1,self.num_waypts_plan): 
+			if self.task == TABLE_TASK:
+				prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
+			elif self.task == LAPTOP_TASK:
+				prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+			elif self.task == COFFEE_TASK:
+				prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
-			#prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
-			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
-			#prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
-			#prob.AddCost(self.laptop_cost, [(t,j) for j in range(7)], "laptop%i"%t)
 
 		for t in range(1,self.num_waypts_plan - 1):
-			#prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
 			prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "up%i"%t)
+			#prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
 			#prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
-		if self.waypts == None:
-			self.record_y()
-		
+
+		print "here is the trajectory"
+		for index in range(self.num_waypts_plan):
+			waypt = self.waypts_plan[index]
+			if len(waypt) < 10:
+				waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+				waypt[2] += math.pi
+			self.robot.SetDOFValues(waypt)
+			coords = robotToCartesian(self.robot)
+			EE_coord_xy = coords[6][0:2]
+			print EE_coord_xy
+	
 
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
 
 	def learnWeights(self, u_h):
-		
-		if self.deform(u_h):
-			new_features = self.featurize(self.waypts)
-			old_features = self.featurize(self.waypts_prev)
+
+		(waypts_deform, waypts_prev) = self.deform(u_h)	
+		if waypts_deform != None:
+			new_features = self.featurize(waypts_deform)
+			old_features = self.featurize(waypts_prev)
 			Phi_p = np.array([new_features[0], sum(new_features[1])])
 			Phi = np.array([old_features[0], sum(old_features[1])])
 			
+			if self.task == TABLE_TASK:
+				update = Phi_p - Phi
+				curr_weight = self.weights - 2.0*update[1]
+				if curr_weight > 1.0:
+					curr_weight = 1.0
+				elif curr_weight < 0.0:
+					curr_weight = 0.0
+
+			if self.task == LAPTOP_TASK:
+				update = Phi_p - Phi
+				curr_weight = self.weights - 50.0*update[1]
+				if curr_weight > 10.0:
+					curr_weight = 10.0
+				elif curr_weight < 0.0:
+					curr_weight = 0.0
 			
-			update = Phi_p - Phi
-			curr_weight = self.weights - 0.5*update[1]
-			if curr_weight > 1.0:
-				curr_weight = 1.0
-			elif curr_weight < 0.0:
-				curr_weight = 0.0
+			if self.task == COFFEE_TASK:
+				update = Phi_p - Phi
+				curr_weight = self.weights - 2.0*update[1]
+				if curr_weight > 1.0:
+					curr_weight = 1.0
+				elif curr_weight < 0.0:
+					curr_weight = 0.0
 			
+
 			"""
 			update = Phi_p - Phi
 			curr_weight = self.weights - 50*update[1]
@@ -354,15 +379,15 @@ class Planner(object):
 		"""
 		deform_waypt_idx = self.curr_waypt_idx + 1
 		if (deform_waypt_idx + self.n) > self.num_waypts:
-			return False
-		self.waypts_prev = copy.deepcopy(self.waypts)
+			return (None, None)
+		waypts_prev = copy.deepcopy(self.waypts)
+		waypts_deform = copy.deepcopy(self.waypts)
 		gamma = np.zeros((self.n,7))
 		for joint in range(7):
 			gamma[:,joint] = self.alpha*np.dot(self.H, u_h[joint])
-		self.waypts[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
-		self.downsample()
+		waypts_deform[deform_waypt_idx : self.n + deform_waypt_idx, :] += gamma
 		#plotTraj(self.env, self.robot, self.bodies, self.waypts_plan, [1, 0, 0])
-		return True
+		return (waypts_deform, waypts_prev)
 	
 
 	# ---- replanning, upsampling, and interpolating ---- #
@@ -438,17 +463,7 @@ class Planner(object):
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
-	def record_y(self):
 
-		self.y_star = [None]*self.num_waypts_plan
-		for index in range(self.num_waypts_plan):
-			waypt = self.waypts_plan[index]
-			if len(waypt) < 10:
-				waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-				waypt[2] += math.pi
-			self.robot.SetDOFValues(waypt)
-			coords = robotToCartesian(self.robot)
-			self.y_star[index] = coords[6][1]	
 
 
 	def update_curr_pos(self, curr_pos):
@@ -494,5 +509,13 @@ if __name__ == '__main__':
 				cost[jointIdx] = (1/(2 * epsilon) * (dist - epsilon)**2)*vel_mag
 			jointIdx += 1
 		return cost
+
+	def coffee_constraint_derivative(self, waypt):
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
+		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
 
 	"""	
