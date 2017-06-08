@@ -176,11 +176,11 @@ class PIDVelJaco(object):
 		print "----------------------------------"
 
 		# save and plot experimental data
-		print "Saving experimental data to file..."
-		weightsfilename = "weights" + str(ID) + str(task) + methodType + ".csv"
-		forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
-		self.expUtil.save_tauH(forcefilename)	
-		self.expUtil.save_weights(weightsfilename)
+		#print "Saving experimental data to file..."
+		#weightsfilename = "weights" + str(ID) + str(task) + methodType + ".csv"
+		#forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
+		#self.expUtil.save_tauH(forcefilename)	
+		#self.expUtil.save_weights(weightsfilename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
