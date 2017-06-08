@@ -177,8 +177,8 @@ class PIDVelJaco(object):
 
 		# save and plot experimental data
 		#print "Saving experimental data to file..."
-		#self.expUtil.save_tauH('tauH_data.csv')	
-		#self.expUtil.plot_tauH()
+		#forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
+		#self.expUtil.save_tauH(filename)	
 
 		# end admittance control mode
 		self.stop_admittance_mode()

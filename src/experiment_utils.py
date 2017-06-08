@@ -1,7 +1,6 @@
 import numpy as np
 from numpy import linalg
 from numpy import linspace
-import pandas as pd
 from matplotlib import rc
 import matplotlib.pyplot as plt
 import time
@@ -24,6 +23,8 @@ class ExperimentUtils(object):
 	def __init__(self):
 		# stores waypoints of originally planned trajectory
 		self.original_traj = None
+		# stores trajectory as it is deformed
+		self.deformed_traj = None
 		# stores the list of positions as the robot is moving 
 		# in the form [timestamp, j1, j2, ... , j7]
 		self.tracked_traj = np.array([0.0]*8)
@@ -32,14 +33,27 @@ class ExperimentUtils(object):
 		self.startT = 0.0
 		self.endT = 0.0
 
-		# stores final weights
-		self.weights = [None]
+		# stores weights over time 
+		# always in the form [timestamp, weight]
+		self.weights = np.array([[0.0, 0.0]])
 
 		# stores running list of forces applied by human
 		# in the form [timestamp, j1, j2, ... , j7]
 		self.tauH = np.array([0.0]*8).reshape((1,8))
 
-	def update_traj(self, timestamp, curr_pos):
+	def update_original_traj(self, waypts):
+		"""
+		Updates the original trajectory
+		"""
+		self.original_traj = waypts
+
+	def update_deformed_traj(self, waypts):
+		"""
+		Updates the deformed trajectory
+		"""
+		self.deformed_traj = waypts
+
+	def update_tracked_traj(self, timestamp, curr_pos):
 		"""
 		Uses current position read from the robot to update the trajectory
 		Saves timestamp when this position was read
@@ -54,6 +68,13 @@ class ExperimentUtils(object):
 		""" 
 		currTau = np.append([timestamp], tau_h.reshape(7))
 		self.tauH = np.vstack([self.tauH, currTau])
+
+	def update_weights(self, timestamp, new_weight):
+		"""
+		Updates list of timestamped weights
+		"""
+		new_w = np.array([timestamp, new_weight])
+		self.weights = np.vstack([self.weights, new_w])
 	
 	def set_startT(self,start_t):
 		"""
