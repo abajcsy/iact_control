@@ -39,8 +39,12 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 220.8]
-place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 252.0]
+pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
+pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
+place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+
+place = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
+
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
@@ -85,6 +89,9 @@ class PIDVelJaco(object):
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
+		# task type - table, laptop, or coffee task
+		self.task = task
+
 		# start admittance control mode
 		self.start_admittance_mode()
 
@@ -96,13 +103,14 @@ class PIDVelJaco(object):
 		# initialize trajectory weights
 		self.weights = 0
 
+		if self.task == COFFEE_TASK:
+			pick = pick_shelf
+		else:
+			pick = pick_basic			
 		start = np.array(pick)*(math.pi/180.0)
 		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
-
-		# task type - table, laptop, or coffee task
-		self.task = task
 
 		# method type - A=IMPEDANCE, B=LEARNING
 		self.methodType = methodType
@@ -231,7 +239,7 @@ class PIDVelJaco(object):
 		for i in range(7):
 			THRESHOLD = INTERACTION_TORQUE_THRESHOLD
 			if self.reached_start and i >= 3:
-				THRESHOLD = 1.0
+				THRESHOLD = 1.5
 			if np.fabs(torque_curr[i][0]) > THRESHOLD:
 				interaction = True
 			else:
@@ -314,7 +322,8 @@ class PIDVelJaco(object):
 
 				# set start time and the original weights as experimental data
 				self.expUtil.set_startT(self.path_start_T)
-				self.expUtil.update_weights(self.path_start_T, self.weights)
+				timestamp = time.time() - self.path_start_T
+				self.expUtil.update_weights(timestamp, self.weights)
 			else:
 				print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 

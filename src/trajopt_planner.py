@@ -25,15 +25,11 @@ import pid
 import copy
 
 
-#Q2: += pi...
-#we can do distance to table well
-#we cant seem to do any laptop features/interesting trajectories
-
-#jain/deformation algorithms still needs to be refined
-
 TABLE_TASK = 0
 LAPTOP_TASK = 1
 COFFEE_TASK = 2
+
+OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 
 class Planner(object):
 	"""
@@ -52,7 +48,6 @@ class Planner(object):
 		self.curr_waypt_idx = None
 
 		# these variables are for trajopt
-		# self.waypts_plan is also treated as the next initial trajectory
 		self.waypts_plan = None
 		self.num_waypts_plan = None
 		self.step_time_plan = None
@@ -79,8 +74,9 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
-		plotPoint(self.env,self.bodies,[-1.3858/2.0 - 0.1, -0.1,0],0.3)
-
+		#plotPoint(self.env,self.bodies,OBS_CENTER,0.3)
+		plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
+	
 		# ---- DEFORMATION Initialization ---- #
 
 		self.alpha = -0.01
@@ -221,7 +217,7 @@ class Planner(object):
 		self.robot.SetDOFValues(waypt)
 		coords = robotToCartesian(self.robot)
 		EE_coord_xy = coords[6][0:2]
-		laptop_xy = np.array([-1.3858/2.0 - 0.1, -0.1])
+		laptop_xy = np.array(OBS_CENTER[0:2])
 		dist = np.linalg.norm(EE_coord_xy - laptop_xy) - 0.4
 		if dist > 0:
 			return 0
@@ -236,7 +232,7 @@ class Planner(object):
 		prev_waypt = waypt[0:7]
 		curr_waypt = waypt[7:14]
 		feature = self.laptop_features(curr_waypt,prev_waypt)
-		return feature*self.weights
+		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
 	# -- Mirror -- #
 
@@ -298,7 +294,7 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 5
+		self.num_waypts_plan = 4
 		if self.waypts_plan == None:
 			init_waypts = np.zeros((self.num_waypts_plan,7))
 			for count in range(self.num_waypts_plan):
@@ -350,17 +346,6 @@ class Planner(object):
 		self.waypts_plan = result.GetTraj()
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 
-		print "here is the trajectory"
-		for index in range(self.num_waypts_plan):
-			waypt = self.waypts_plan[index]
-			if len(waypt) < 10:
-				waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-				waypt[2] += math.pi
-			self.robot.SetDOFValues(waypt)
-			coords = robotToCartesian(self.robot)
-			EE_coord_xy = coords[6][0:2]
-			print EE_coord_xy
-	
 
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
@@ -387,7 +372,7 @@ class Planner(object):
 				update_gain = 2.0
 				max_weight = 1.0
 			elif self.task == LAPTOP_TASK:
-				update_gain = 50.0
+				update_gain = 100.0
 				max_weight = 10.0
 			elif self.task == COFFEE_TASK:
 				update_gain = 2.0
@@ -442,7 +427,7 @@ class Planner(object):
 		self.weights = weights
 		self.trajOpt(start, goal)
 		self.upsample(step_time)
-		plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, [0, 0, 1])
+		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, [0, 0, 1])
 
 	def upsample(self, step_time):
 		"""
@@ -513,19 +498,6 @@ class Planner(object):
 
 if __name__ == '__main__':
 
-	trajplanner = Planner()
-
-	candlestick = np.array([180.0]*7)	
-	home_pos = np.array([103.366,197.13,180.070,43.4309,265.11,257.271,287.9276])
-
-	s = np.array(home_pos)*(math.pi/180.0)
-	g = np.array(candlestick)*(math.pi/180.0)
-	T = 8.0
-	features = None
-	weights = [1,1]
-
-	trajplanner.replan(s, g, weights, 0.0, T, 1.0)
-	#executePathSim(trajplanner.env,trajplanner.robot,trajplanner.waypts)
 	time.sleep(50)
 
 
