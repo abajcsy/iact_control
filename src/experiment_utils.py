@@ -88,10 +88,32 @@ class ExperimentUtils(object):
 		"""
 		self.endT = end_t
 
+	# ---- Computational Functionality ---- #
+	def total_interaction_T(self, ID, task, method):
+		"""
+		Gets total interaction time for participant during task with method.
+		"""
+		data = self.parse_data("weights")
+		values = data[ID][task][method]
+
+		
+
+	def total_traj_T(self, ID, task, method):
+		"""
+		Gets total trajectory time for participant during task with method.
+		"""
+		#TODO IMPLEMENT THIS!
+
+	def total_interaction_F(self, ID, task, method): 
+		"""
+		Gets total force applied by participant during task with method.
+		"""
+		data = self.parse_data("weights")
+		values = data[ID][task][method]
 
 	# ---- Plotting Functionality ---- #
 
-	def plot_weights(self, ID, task, method):
+	def plot_weights(self, ID, task, method,saveFig=False):
 		data = self.parse_data("weights")
 		values = data[ID][task][method]
 		print "values: " + str(values)
@@ -110,7 +132,6 @@ class ExperimentUtils(object):
 		fig.text(0.5, 0.92, 'Weight Update for Task ' + str(task), ha='center', fontsize=20)
 		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
 		fig.text(0.04, 0.5, 'theta', va='center', rotation='vertical', fontsize=18)
-
 
 		# plot the weights over time
 		base_line,  = plt.plot(wT, wV, '-', linewidth=3.0, color=c[0])
@@ -132,6 +153,13 @@ class ExperimentUtils(object):
 		ax.yaxis.set_ticks_position('none') 
 
 		plt.show()
+
+		if saveFig:
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/"
+			datapath = here + subdir
+			fig.savefig(datapath+"theta"+str(ID)+str(task)+method+".png", bbox_inches="tight")
+			print "Saved weight figure."
 
 	def plot_tauH(self, ID, task, method):
 		"""
@@ -212,11 +240,11 @@ class ExperimentUtils(object):
 				Adata = Avalues[1:8]
 				Bdata = Bvalues[1:8]
 
-				A_means[ID-1] = np.mean(Adata)
-				A_std[ID-1] = np.std(Adata)
+				A_means[ID-1] = np.mean(np.abs(Adata))
+				#A_std[ID-1] = np.std(np.abs(Adata))
 
-				B_means[ID-1] = np.mean(Bdata)
-				B_std[ID-1] = np.std(Bdata)
+				B_means[ID-1] = np.mean(np.abs(Bdata))
+				#B_std[ID-1] = np.std(np.abs(Bdata))
 		
 		print A_means
 		print A_std
@@ -235,8 +263,8 @@ class ExperimentUtils(object):
 		rc('text', usetex=True)
 
 		fig, ax = plt.subplots()
-		rectsA = ax.bar(ind, A_means, width, color=greenC, ecolor='k', edgecolor="none")
-		rectsB = ax.bar(ind + width, B_means, width, color=orangeC, ecolor='k', edgecolor="none")
+		rectsA = ax.bar(ind, A_means, width, color=greenC, edgecolor="none")
+		rectsB = ax.bar(ind + width, B_means, width, color=orangeC, edgecolor="none")
 
 		# plots with stdev
 		#rectsA = ax.bar(ind, A_means, width, color=greenC, yerr=A_std, ecolor='k', edgecolor="none")
@@ -255,7 +283,7 @@ class ExperimentUtils(object):
 		autolabel(rectsB)
 
 		# add some text for labels, title and axes ticks
-		ax.set_ylabel('Avg Force',fontsize=15)
+		ax.set_ylabel('Avg Effort (Nm)',fontsize=15)
 		ax.set_xlabel('Participant Number',fontsize=15)
 		ax.set_title('Average Human Effort for Experiment 1',fontsize=22)
 		ax.set_xticks(ind + width)
@@ -282,9 +310,12 @@ class ExperimentUtils(object):
 		leg.get_frame().set_linewidth(0.0)
 		plt.show()
 
-		if saveFig:		
-			plt.savefig("avgEffort.png", bbox_inches="tight")
-
+		if saveFig:
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/"
+			datapath = here + subdir
+			fig.savefig(datapath+"avgEffort.png", bbox_inches="tight")
+			print "Saved effort figure."
 
 	# ---- I/O Functionality ---- #
 
@@ -313,6 +344,7 @@ class ExperimentUtils(object):
 		data = {}
 		for filename in os.listdir(datapath):
 			if dataType in filename:
+				print filename
 				info = filename.split(dataType)[1]
 				ID = int(info[0])
 				task = int(info[1])
@@ -325,6 +357,8 @@ class ExperimentUtils(object):
 					data[ID][task] = {}
 				with open(os.path.join(datapath, filename), 'r') as f:
 					methodData = [None]*8
+					if dataType == "weights": 
+						methodData = [None]*2					
 					i = 0
 					for line in f:
 						values = line.split(',')
@@ -332,7 +366,6 @@ class ExperimentUtils(object):
 						methodData[i] = final_values
 						i += 1
 					data[ID][task][methodType] = np.array(methodData)
-				print "f: " + str(filename) + "|" + str(data)
 
 		return data				
 		
@@ -405,7 +438,7 @@ if __name__ == '__main__':
 
 	experi = ExperimentUtils()
 
-	experi.plot_avgEffort()
+	experi.plot_avgEffort(saveFig=False)
 	#experi.plot_tauH(4, 0, 'B')
-	experi.plot_weights(4, 0, 'B')
+	experi.plot_weights(4, 0, 'B',saveFig=False)
 	#experi.plot_tauH_together(3, 0, 'B')
