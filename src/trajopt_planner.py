@@ -29,7 +29,6 @@ import copy
 #we can do distance to table well
 #we cant seem to do any laptop features/interesting trajectories
 
-
 #jain/deformation algorithms still needs to be refined
 
 TABLE_TASK = 0
@@ -102,7 +101,8 @@ class Planner(object):
 
 	def featurize(self, waypts):
 		"""
-		computs the user-defined features for a given trajectory.
+		Computes the user-defined features for a given trajectory.
+		---
 		input trajectory, output list of feature values
 		"""
 		features = [None,None]
@@ -117,11 +117,12 @@ class Planner(object):
 				features[1][index] = self.coffee_features(waypts[index+1])
 		return features
 
-
+	# -- Velocity -- #
 
 	def velocity_features(self, waypts):
 		"""
-		computes total velocity cost over waypoints, confirmed to match trajopt.
+		Computes total velocity cost over waypoints, confirmed to match trajopt.
+		---
 		input trajectory, output scalar feature
 		"""
 		vel = 0.0
@@ -133,16 +134,22 @@ class Planner(object):
 	
 	def velocity_cost(self, waypts):
 		"""
-		computes the total velocity cost.
+		Computes the total velocity cost.
+		---
 		input trajectory, output scalar cost
 		"""
 		#mywaypts = np.reshape(waypts,(7,self.num_waypts_plan)).T
 		return self.velocity_features(mywaypts)
 
-
+	# -- Distance to Table -- #
 
 	def table_features(self, waypt):
-
+		"""
+		Computes the total cost over waypoints based on 
+		z-axis distance to table
+		---
+		input trajectory, output scalar feature
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -152,14 +159,23 @@ class Planner(object):
 		return EEcoord_z
 	
 	def table_cost(self, waypt):
-
+		"""
+		Computes the total distance to table cost.
+		---
+		input trajectory, output scalar cost
+		"""
 		feature = self.table_features(waypt)
 		return feature*self.weights
 
-
+	# -- Coffee (or z-orientation of end-effector) -- #
 
 	def coffee_features(self, waypt):
-
+		"""
+		Computes the distance to table cost for waypoint
+		by checking if the EE is oriented vertically
+		---
+		input trajectory, output scalar cost
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -168,14 +184,23 @@ class Planner(object):
 		return sum(abs(EE_link.GetTransform()[:2,:3].dot([1,0,0])))
 
 	def coffee_cost(self, waypt):
-		
+		"""
+		Computes the total coffee (EE orientation) cost.
+		---
+		input trajectory, output scalar cost
+		"""
 		feature = self.coffee_features(waypt)
 		return feature*self.weights
 
-
+	# -- Distance to Laptop -- #
 
 	def laptop_features(self, waypt, prev_waypt):
-
+		"""
+		Computes laptop cost over waypoints, interpolating and
+		sampling between each pair to check for intermediate collisions
+		---
+		input trajectory, output scalar feature
+		"""
 		feature = 0.0
 		NUM_STEPS = 4
 		for step in range(NUM_STEPS):
@@ -184,7 +209,12 @@ class Planner(object):
 		return feature
 
 	def laptop_dist(self, waypt):
-
+		"""
+		Computes distance from end-effector to laptop in xy coords
+		input trajectory, output scalar distance where 
+			0: EE is at more than 0.4 meters away from laptop
+			+: EE is closer than 0.4 meters to laptop
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -198,18 +228,29 @@ class Planner(object):
 		return -dist
 
 	def laptop_cost(self, waypt):
-
+		"""
+		Computes the total distance to laptop cost
+		---
+		input trajectory, output scalar cost
+		"""
 		prev_waypt = waypt[0:7]
 		curr_waypt = waypt[7:14]
 		feature = self.laptop_features(curr_waypt,prev_waypt)
 		return feature*self.weights
 
-	
+	# -- Mirror -- #
 
+	def mirror_cost(self, waypt):
+		#TODO implement me!
+		return
 
 	# ---- custom constraints --- #
 
 	def table_constraint(self, waypt):
+		"""
+		Constrains z-axis of robot's end-effector to always be 
+		above the table.
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -221,7 +262,10 @@ class Planner(object):
 		return -EE_coord_z
 
 	def coffee_constraint(self, waypt):
-
+		"""
+		Constrains orientation of robot's end-effector to be 
+		holding coffee mug upright.
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -230,6 +274,9 @@ class Planner(object):
 		return EE_link.GetTransform()[:2,:3].dot([1,0,0])
 
 	def coffee_constraint_derivative(self, waypt):
+		"""
+		Analytic derivative for coffee constraint.
+		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
@@ -238,15 +285,14 @@ class Planner(object):
 		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
 
 
-
-
-
 	# ---- here's trajOpt --- #
 		
 	def trajOpt(self, start, goal):
 		"""
-		computes a plan from start to goal using optimizer.
-		updates the waypts_plan
+		Computes a plan from start to goal using trajectory optimizer.
+		Reference: http://joschu.net/docs/trajopt-paper.pdf
+		---
+		input is start and goal pos, updates the waypts_plan
 		"""
 		if len(start) < 10:
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
@@ -320,7 +366,13 @@ class Planner(object):
 	# ---- here's our algorithms for modifying the trajectory ---- #
 
 	def learnWeights(self, u_h):
-
+		"""
+		Deforms the trajectory given human force, u_h, and
+		updates features by computing difference between 
+		features of new trajectory and old trajectory
+		---
+		input is human force and returns updated weights 
+		"""
 		(waypts_deform, waypts_prev) = self.deform(u_h)	
 		if waypts_deform != None:
 			new_features = self.featurize(waypts_deform)
@@ -328,54 +380,38 @@ class Planner(object):
 			Phi_p = np.array([new_features[0], sum(new_features[1])])
 			Phi = np.array([old_features[0], sum(old_features[1])])
 			
+			update_gain = 1.0
+			max_weight = 1.0
+
 			if self.task == TABLE_TASK:
-				update = Phi_p - Phi
-				curr_weight = self.weights - 2.0*update[1]
-				if curr_weight > 1.0:
-					curr_weight = 1.0
-				elif curr_weight < 0.0:
-					curr_weight = 0.0
+				update_gain = 2.0
+				max_weight = 1.0
+			elif self.task == LAPTOP_TASK:
+				update_gain = 50.0
+				max_weight = 10.0
+			elif self.task == COFFEE_TASK:
+				update_gain = 2.0
+				max_weight = 1.0
 
-			if self.task == LAPTOP_TASK:
-				update = Phi_p - Phi
-				curr_weight = self.weights - 50.0*update[1]
-				if curr_weight > 10.0:
-					curr_weight = 10.0
-				elif curr_weight < 0.0:
-					curr_weight = 0.0
-			
-			if self.task == COFFEE_TASK:
-				update = Phi_p - Phi
-				curr_weight = self.weights - 2.0*update[1]
-				if curr_weight > 1.0:
-					curr_weight = 1.0
-				elif curr_weight < 0.0:
-					curr_weight = 0.0
-			
-
-			"""
 			update = Phi_p - Phi
-			curr_weight = self.weights - 50*update[1]
-			if curr_weight > 10.0:
-				curr_weight = 10.0
+			curr_weight = self.weights - update_gain*update[1]
+			if curr_weight > max_weight:
+				curr_weight = max_weight
 			elif curr_weight < 0.0:
 				curr_weight = 0.0
 
-			#curr_weight = 10 #remember to comment out
-
-			"""
-
-			print "here is the new weight for the table:"
+			print "here is the new weight:"
 			print curr_weight
 
 			self.weights = curr_weight
 			return self.weights
 
-
 	def deform(self, u_h):
 		"""
-		deform the next n waypoints of the upsampled trajectory
+		Deforms the next n waypoints of the upsampled trajectory
 		updates the upsampled trajectory, stores old trajectory
+		---
+		input is human force, returns deformed and old waypts
 		"""
 		deform_waypt_idx = self.curr_waypt_idx + 1
 		if (deform_waypt_idx + self.n) > self.num_waypts:
@@ -394,7 +430,8 @@ class Planner(object):
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
 		"""
-		replan the trajectory from start to goal given weights.
+		Replan the trajectory from start to goal given weights.
+		---
 		input trajectory parameters, update raw and upsampled trajectories
 		"""
 		if weights == None:
@@ -409,7 +446,8 @@ class Planner(object):
 
 	def upsample(self, step_time):
 		"""
-		put waypoints along trajectory at step_time increments.
+		Put waypoints along trajectory at step_time increments.
+		---
 		input desired time increment, update upsampled trajectory
 		"""
 		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
@@ -436,7 +474,7 @@ class Planner(object):
 
 	def downsample(self):
 		"""
-		updates the trajopt trajectory from the upsampled trajectory.
+		Updates the trajopt trajectory from the upsampled trajectory.
 		changes the trajopt waypoints between start and goal.
 		"""
 		for index in range(1,self.num_waypts_plan-1):
@@ -463,15 +501,11 @@ class Planner(object):
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
 
-
-
-
 	def update_curr_pos(self, curr_pos):
 		"""
 		Updates DOF values in OpenRAVE simulation based on curr_pos.
 		----
-		curr_pos 	7x1 vector of current joint angles (degrees)
-		----
+		curr_pos - 7x1 vector of current joint angles (degrees)
 		"""
 		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0]+math.pi,curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
 		
@@ -494,7 +528,6 @@ if __name__ == '__main__':
 	#executePathSim(trajplanner.env,trajplanner.robot,trajplanner.waypts)
 	time.sleep(50)
 
-	
 
 	"""
 	

@@ -94,6 +94,7 @@ class ExperimentUtils(object):
 	def plot_weights(self, ID, task, method):
 		data = self.parse_data("weights")
 		values = data[ID][task][method]
+		print "values: " + str(values)
 		wT = values[0]
 		wV = values[1]
 
@@ -106,30 +107,29 @@ class ExperimentUtils(object):
 	
 		fig, ax = plt.subplots()
 		
-		fig.text(0.5, 0.92, 'Weight Update During Experiment', ha='center', fontsize=20)
+		fig.text(0.5, 0.92, 'Weight Update for Task ' + str(task), ha='center', fontsize=20)
 		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
 		fig.text(0.04, 0.5, 'theta', va='center', rotation='vertical', fontsize=18)
 
 
-		# plot the joint torque over time
+		# plot the weights over time
 		base_line,  = plt.plot(wT, wV, '-', linewidth=3.0, color=c[0])
 	
-		#ax.set_ylim([-30,30])
-		#ax.set_yticks(scipy.arange(-30,31,15))
-		#plt.ylabel("Joint " + str(i+1), fontsize=15)
-
-		#ax.set_xlim([0, np.amax(wV)])
+		ax.set_ylim([0,1.1])
+		ax.set_yticks(scipy.arange(0,1.1,0.5))
+	
 		# remove x-axis number labels
 		#ax.get_xaxis().set_visible(False)
 
 		# remove the plot frame lines
-		#ax.spines["top"].set_visible(False)    
-		#ax.spines["right"].set_visible(False)      
-		#ax.spines["bottom"].set_visible(False)   
+		ax.spines["top"].set_visible(False)    
+		ax.spines["right"].set_visible(False)      
+		#ax.spines["bottom"].set_visible(False) 
+		#ax.spines["left"].set_visible(False)   
 
 		# Turn off tick labels
-		#ax.xaxis.set_ticks_position('none') 
-		#ax.yaxis.set_ticks_position('none') 
+		ax.xaxis.set_ticks_position('none') 
+		ax.yaxis.set_ticks_position('none') 
 
 		plt.show()
 
@@ -184,69 +184,6 @@ class ExperimentUtils(object):
 			# Turn off tick labels
 			ax.xaxis.set_ticks_position('none') 
 			ax.yaxis.set_ticks_position('none') 
-
-		plt.show()
-
-	def plot_tauH_together(self, ID, task, method):
-		"""
-		Plots human-applied force from data file specified by:
-			force<ID><task><method>.csv
-		"""
-		data = self.parse_data("force")
-
-		values = data[ID][task][method]
-		tauT = values[0]
-		tauH = values[1:8]
-
-		# fonts
-		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-		rc('text', usetex=True)
-
-		# colors 
-		c = ['b','g','r','c','m','y','#FF8C00']
-	
-		fig, ax = plt.subplots()
-		
-		fig.text(0.5, 0.92, 'Human Interaction Forces During Experiment', ha='center', fontsize=20)
-		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
-		fig.text(0.04, 0.5, '$u_H$ (Nm)', va='center', rotation='vertical', fontsize=18)
-
-		baselines = []
-		# plot joint_torques
-		for i in range(7):		
-			# plot the joint torque over time
-			base_line,  = plt.plot(tauT, tauH[i], '-', linewidth=3.0, color=c[i])
-			baselines.append(base_line)
-
-			ax.set_ylim([-30,30])
-			ax.set_yticks(scipy.arange(-30,31,15))
-			plt.ylabel("Joint " + str(i+1), fontsize=15)
-
-			ax.set_xlim([0, np.amax(tauT)])
-			# remove x-axis number labels
-			ax.get_xaxis().set_visible(False)
-
-			# remove the plot frame lines
-			ax.spines["top"].set_visible(False)    
-			ax.spines["right"].set_visible(False)      
-			ax.spines["bottom"].set_visible(False)   
-
-			if i == 6:
-				# only for the last graph show the bottom axis
-				ax.get_xaxis().set_visible(True)
-				ax.spines["bottom"].set_visible(True)  	
-
-			# Turn off tick labels
-			ax.xaxis.set_ticks_position('none') 
-			ax.yaxis.set_ticks_position('none') 
-
-		l = []
-		tex = []
-		for i in range(7):
-			l.append(baselines[i])
-			tex.append("J"+str(i))
-		leg = ax.legend(l, tex, fontsize=15)
-		leg.get_frame().set_linewidth(0.0)
 
 		plt.show()
 
@@ -397,7 +334,6 @@ class ExperimentUtils(object):
 					data[ID][task][methodType] = np.array(methodData)
 				print "f: " + str(filename) + "|" + str(data)
 
-		print data
 		return data				
 		
 
@@ -469,7 +405,7 @@ if __name__ == '__main__':
 
 	experi = ExperimentUtils()
 
-	#experi.plot_avgEffort()
-	experi.plot_tauH(4, 0, 'B')
-	#experi.plot_weights(4, 0, 'B')
+	experi.plot_avgEffort()
+	#experi.plot_tauH(4, 0, 'B')
+	experi.plot_weights(4, 0, 'B')
 	#experi.plot_tauH_together(3, 0, 'B')

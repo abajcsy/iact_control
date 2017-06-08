@@ -249,6 +249,8 @@ class PIDVelJaco(object):
 			if self.methodType == LEARNING:
 				self.weights = self.planner.learnWeights(torque_curr)
 				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+
+				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_weights(timestamp, self.weights)
 
@@ -273,9 +275,9 @@ class PIDVelJaco(object):
 
 		# update the experiment utils executed trajectory tracker
 		if self.reached_start and not self.reached_goal:
+			# update the experimental data with new position
 			timestamp = time.time() - self.path_start_T
-			self.expUtil.update_weights(timestamp, self.weights)
-			#self.expUtil.update_traj(timestamp, curr_pos)
+			self.expUtil.update_tracked_traj(timestamp, curr_pos)
 
 		# update cmd from PID based on current position
 		self.cmd = self.PID_control(curr_pos)
@@ -309,7 +311,10 @@ class PIDVelJaco(object):
 			if is_at_start:
 				self.reached_start = True
 				self.path_start_T = time.time()
+
+				# set start time and the original weights as experimental data
 				self.expUtil.set_startT(self.path_start_T)
+				self.expUtil.update_weights(self.path_start_T, self.weights)
 			else:
 				print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
