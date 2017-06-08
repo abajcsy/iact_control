@@ -80,7 +80,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, task, methodType):
+	def __init__(self, p_gain, i_gain, d_gain, ID, task, methodType):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -176,9 +176,11 @@ class PIDVelJaco(object):
 		print "----------------------------------"
 
 		# save and plot experimental data
-		#print "Saving experimental data to file..."
-		#forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
-		#self.expUtil.save_tauH(filename)	
+		print "Saving experimental data to file..."
+		weightsfilename = "weights" + str(ID) + str(task) + methodType + ".csv"
+		forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
+		self.expUtil.save_tauH(forcefilename)	
+		self.expUtil.save_weights(weightsfilename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -247,6 +249,8 @@ class PIDVelJaco(object):
 			if self.methodType == LEARNING:
 				self.weights = self.planner.learnWeights(torque_curr)
 				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+				timestamp = time.time() - self.path_start_T
+				self.expUtil.update_weights(timestamp, self.weights)
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -270,7 +274,8 @@ class PIDVelJaco(object):
 		# update the experiment utils executed trajectory tracker
 		if self.reached_start and not self.reached_goal:
 			timestamp = time.time() - self.path_start_T
-			self.expUtil.update_traj(timestamp, curr_pos)
+			self.expUtil.update_weights(timestamp, self.weights)
+			#self.expUtil.update_traj(timestamp, curr_pos)
 
 		# update cmd from PID based on current position
 		self.cmd = self.PID_control(curr_pos)
@@ -340,14 +345,15 @@ class PIDVelJaco(object):
 			self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 6:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, task, methodType."
+	if len(sys.argv) < 7:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, ID, task, methodType."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
 		d_gains = float(sys.argv[3])
-		task = int(sys.argv[4])
-		methodType = sys.argv[5]
+		ID = int(sys.argv[4])
+		task = int(sys.argv[5])
+		methodType = sys.argv[6]
 
-		PIDVelJaco(p_gains,i_gains,d_gains,task,methodType)
+		PIDVelJaco(p_gains,i_gains,d_gains,ID,task,methodType)
 	

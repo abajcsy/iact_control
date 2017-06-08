@@ -91,6 +91,48 @@ class ExperimentUtils(object):
 
 	# ---- Plotting Functionality ---- #
 
+	def plot_weights(self, ID, task, method):
+		data = self.parse_data("weights")
+		values = data[ID][task][method]
+		wT = values[0]
+		wV = values[1]
+
+		# fonts
+		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+		rc('text', usetex=True)
+
+		# colors 
+		c = ['b','g','r','c','m','y','#FF8C00']
+	
+		fig, ax = plt.subplots()
+		
+		fig.text(0.5, 0.92, 'Weight Update During Experiment', ha='center', fontsize=20)
+		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
+		fig.text(0.04, 0.5, 'theta', va='center', rotation='vertical', fontsize=18)
+
+
+		# plot the joint torque over time
+		base_line,  = plt.plot(wT, wV, '-', linewidth=3.0, color=c[0])
+	
+		#ax.set_ylim([-30,30])
+		#ax.set_yticks(scipy.arange(-30,31,15))
+		#plt.ylabel("Joint " + str(i+1), fontsize=15)
+
+		#ax.set_xlim([0, np.amax(wV)])
+		# remove x-axis number labels
+		#ax.get_xaxis().set_visible(False)
+
+		# remove the plot frame lines
+		#ax.spines["top"].set_visible(False)    
+		#ax.spines["right"].set_visible(False)      
+		#ax.spines["bottom"].set_visible(False)   
+
+		# Turn off tick labels
+		#ax.xaxis.set_ticks_position('none') 
+		#ax.yaxis.set_ticks_position('none') 
+
+		plt.show()
+
 	def plot_tauH(self, ID, task, method):
 		"""
 		Plots human-applied force from data file specified by:
@@ -327,7 +369,7 @@ class ExperimentUtils(object):
 		subdir = "/data/experimental/"
 		datapath = here + subdir
 
-		if dataType != "force" and dataType != "traj":
+		if dataType != "force" and dataType != "traj" and dataType != "weights":
 			print dataType + " is not a valid data type!"
 			return None
 
@@ -372,35 +414,39 @@ class ExperimentUtils(object):
 		print self.tauH.T
 
 		with open(filepath, 'w') as out:
-			# write total interaction time for each joint 
-			#total_itime = 0.0
-			#prevT = -1.0
-			#for t in range(len(self.tauH)):
-			#	if np.sum(self.tauH[t][1:8]) != 0:
-			#		if prevT != -1.0:
-			#			total_itime += (self.tauH[t][0] - prevT) 
-			#		prevT = self.tauH[t][0]
-			#out.write('total_iactT: %f\n' % total_itime)
-			
-			# write total interaction force for each joint
-			#total_iforce = np.sum(self.tauH[:,1:8], axis=0)
-			#out.write('total_iactF: %s\n' % total_iforce)
-
-			# write headers for data
-			#out.write('time,tau_j1,tau_j2,tau_j3,tau_j4,tau_j5,tau_j6,tau_j7\n')
 			for i in range(len(self.tauH.T)):
 				if i == 0:
 					out.write('time')
 				else:
 					out.write('tau_j'+str(i))
-				#out.write('%f' % self.tauH[t][0])
 				for j in range(len(self.tauH.T[i])):
 					out.write(',%f' % self.tauH.T[i][j])
 				out.write('\n')
 		out.close()
 
+	def save_weights(self, filename):
+		"""
+		Saves the weights over time to CSV file. 
+		"""	
+		# get the current script path
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		filepath = here + subdir + filename 
+
+		with open(filepath, 'w') as out:
+			out.write('time')
+			for i in range(len(self.weights[:,0])):
+				out.write(',%f' % self.weights[i][0])		
+			out.write('\n')					
+			out.write('weights')
+			for i in range(len(self.weights[:,1])):
+				out.write(',%f' % self.weights[i][1])
+			out.write('\n')
+		out.close()
+
 	def save_trackedTraj(self, filename):
 		"""
+		TODO: THIS IS WRONG
 		Saves the measured positions of the trajectory to CSV file. 
 		"""	
 
@@ -431,7 +477,12 @@ if __name__ == '__main__':
 	#experi.update_tauH(11.2, tau_h)
 	#print experi.tauH
 	#experi.save_tauH("force20B.csv")
-	experi.parse_data("force")
-	experi.plot_avgEffort()
-	experi.plot_tauH(3, 0, 'B')
+	#experi.update_weights(0.1, 0.5)
+	#experi.update_weights(0.5, 0.89)
+	#print experi.weights
+	#experi.save_weights("weights30B.csv")
+	#experi.parse_data("force")
+	#experi.plot_avgEffort()
+	#experi.plot_tauH(3, 0, 'B')
+	experi.plot_weights(4, 0, 'B')
 	#experi.plot_tauH_together(3, 0, 'B')
