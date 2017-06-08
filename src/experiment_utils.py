@@ -469,20 +469,7 @@ if __name__ == '__main__':
 
 	experi = ExperimentUtils()
 
-	#tau_h = np.array([0]*7)
-	#experi.update_tauH(5.4, tau_h)
-	#tau_h = np.array([0,1,1,6,7,8,9])
-	#experi.update_tauH(10.2, tau_h)
-	#tau_h = np.array([0,0,1,0,0,0,0])
-	#experi.update_tauH(11.2, tau_h)
-	#print experi.tauH
-	#experi.save_tauH("force20B.csv")
-	#experi.update_weights(0.1, 0.5)
-	#experi.update_weights(0.5, 0.89)
-	#print experi.weights
-	#experi.save_weights("weights30B.csv")
-	#experi.parse_data("force")
 	#experi.plot_avgEffort()
-	#experi.plot_tauH(3, 0, 'B')
-	experi.plot_weights(4, 0, 'B')
+	experi.plot_tauH(4, 0, 'B')
+	#experi.plot_weights(4, 0, 'B')
 	#experi.plot_tauH_together(3, 0, 'B')
