@@ -104,6 +104,12 @@ def plotPoint(env, bodies, coords, size=0.1, color=[0, 1, 0]):
 		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c)
 		bodies.append(body)
 
+def plotSphere(env, bodies, coords, size=0.1):
+	"""
+	Plots a single sphere in OpenRAVE center at coords(x,y,z) location
+	"""
+	bodies.append(env.plot3(points=coords, pointsize=size,  colors=(1,0,0,0.3), drawstyle=1))
+
 def plotTable(env):
 	"""
 	Plots the robot table in OpenRAVE.
