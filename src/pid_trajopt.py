@@ -41,18 +41,18 @@ candlestick_pos = [180.0]*7
 
 pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
 pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
-place = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
-
-place = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
+place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
 
 epsilon = 0.10
 MAX_CMD_TORQUE = 40.0
 INTERACTION_TORQUE_THRESHOLD = 8.0
 
-TABLE_TASK = 0
-LAPTOP_TASK = 1
-COFFEE_TASK = 2
+HUMAN_TASK = 0
+COFFEE_TASK = 1
+TABLE_TASK = 2
+LAPTOP_TASK = 3
 
 IMPEDANCE = 'A'
 LEARNING = 'B'
@@ -84,13 +84,24 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, ID, task, methodType):
+	def __init__(self, p_gain, i_gain, d_gain, ID, task, methodType, demo):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
 		# task type - table, laptop, or coffee task
 		self.task = task
+
+		# method type - A=IMPEDANCE, B=LEARNING
+		self.methodType = methodType
+		# optimal demo mode - F
+		if demo == "F" or demo == "f":
+			self.demo = False
+		elif demo == "T" or demo == "t":
+			self.demo = True
+		else:
+			print "Oopse - it is unclear if you want demo mode. Turning demo mode off."
+			self.demo = False
 
 		# start admittance control mode
 		self.start_admittance_mode()
@@ -102,18 +113,27 @@ class PIDVelJaco(object):
 
 		# initialize trajectory weights
 		self.weights = 0
+		# if in demo mode, then set the weights to be optimal
+		if self.demo:
+			if self.task == TABLE_TASK or self.task == COFFEE_TASK:
+				self.weights = 1
+			elif self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
+				self.weights = 10
 
-		if self.task == COFFEE_TASK:
+		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
 			pick = pick_shelf
 		else:
-			pick = pick_basic			
+			pick = pick_basic
+
+		if self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
+			place = place_higher
+		else:
+			place = place_lower
+		
 		start = np.array(pick)*(math.pi/180.0)
 		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
-
-		# method type - A=IMPEDANCE, B=LEARNING
-		self.methodType = methodType
 
 		# create the trajopt planner and plan from start to goal
 		self.planner = trajopt_planner.Planner(self.task)
@@ -153,6 +173,9 @@ class PIDVelJaco(object):
 		# ---- Experimental Utils ---- #
 
 		self.expUtil = experiment_utils.ExperimentUtils()
+		# store original trajectory
+		original_traj = self.planner.get_waypts_plan()
+		self.expUtil.update_original_traj(original_traj)
 
 		# ---- ROS Setup ---- #
 
@@ -184,11 +207,18 @@ class PIDVelJaco(object):
 		print "----------------------------------"
 
 		# save and plot experimental data
-		#print "Saving experimental data to file..."
-		#weightsfilename = "weights" + str(ID) + str(task) + methodType + ".csv"
-		#forcefilename = "force" + str(ID) + str(task) + methodType + ".csv"		
-		#self.expUtil.save_tauH(forcefilename)	
-		#self.expUtil.save_weights(weightsfilename)
+		if not self.demo:
+			print "Saving experimental data to file..."
+			weights_filename = "weights" + str(ID) + str(task) + methodType + ".csv"
+			force_filename = "force" + str(ID) + str(task) + methodType + ".csv"		
+			tracked_filename = "tracked" + str(ID) + str(task) + methodType + ".csv"
+			original_filename = "original" + str(ID) + str(task) + methodType + ".csv"
+			deformed_filename = "deformed" + str(ID) + str(task) + methodType + ".csv"		
+			self.expUtil.save_tauH(force_filename)	
+			self.expUtil.save_weights(weights_filename)
+			self.expUtil.save_tracked_traj(tracked_filename)
+			self.expUtil.save_original_traj(original_filename)
+			self.expUtil.save_deformed_traj(deformed_filename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -238,8 +268,10 @@ class PIDVelJaco(object):
 		interaction = False
 		for i in range(7):
 			THRESHOLD = INTERACTION_TORQUE_THRESHOLD
-			if self.reached_start and i >= 3:
-				THRESHOLD = 1.5
+			if self.reached_start and i == 3:
+				THRESHOLD = 2.0
+			if self.reached_start and i > 3:
+				THRESHOLD = 1.0
 			if np.fabs(torque_curr[i][0]) > THRESHOLD:
 				interaction = True
 			else:
@@ -261,6 +293,10 @@ class PIDVelJaco(object):
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_weights(timestamp, self.weights)
+
+				# store deformed trajectory
+				deformed_traj = self.planner.get_waypts_plan()
+				self.expUtil.update_deformed_traj(deformed_traj)
 
 	def joint_angles_callback(self, msg):
 		"""
@@ -359,8 +395,8 @@ class PIDVelJaco(object):
 			self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 7:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, ID, task, methodType."
+	if len(sys.argv) < 8:
+		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, ID, task, methodType, demo."
 	else:	
 		p_gains = float(sys.argv[1])
 		i_gains = float(sys.argv[2])
@@ -368,6 +404,7 @@ if __name__ == '__main__':
 		ID = int(sys.argv[4])
 		task = int(sys.argv[5])
 		methodType = sys.argv[6]
+		demo = sys.argv[7]
 
-		PIDVelJaco(p_gains,i_gains,d_gains,ID,task,methodType)
+		PIDVelJaco(p_gains,i_gains,d_gains,ID,task,methodType,demo)
 	

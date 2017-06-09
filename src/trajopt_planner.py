@@ -25,11 +25,13 @@ import pid
 import copy
 
 
-TABLE_TASK = 0
-LAPTOP_TASK = 1
-COFFEE_TASK = 2
+HUMAN_TASK = 0
+COFFEE_TASK = 1
+TABLE_TASK = 2
+LAPTOP_TASK = 3
 
 OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
+HUMAN_CENTER = [0.0, 0.2, 0.0]
 
 class Planner(object):
 	"""
@@ -74,8 +76,8 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
-		#plotPoint(self.env,self.bodies,OBS_CENTER,0.3)
-		plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
+		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
+		plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
 	
 		# ---- DEFORMATION Initialization ---- #
 
@@ -91,6 +93,15 @@ class Planner(object):
 		Uh = np.zeros((self.n, 1))
 		Uh[0] = 1
 		self.H = np.dot(Rinv,Uh)*(np.sqrt(self.n)/np.linalg.norm(np.dot(Rinv,Uh)))
+
+	# ---- utilities/getter functions ---- #
+
+	def get_waypts_plan(self):
+		"""
+		Returns reference to waypts_plan (used by trajopt)
+		Used mostly for recording experimental data by pid_trajopt.py
+		"""
+		return self.waypts_plan
 
 
 	# ---- custom feature and cost functions ---- #
@@ -111,6 +122,8 @@ class Planner(object):
 				features[1][index] = self.laptop_features(waypts[index+1],waypts[index])
 			elif self.task == COFFEE_TASK:
 				features[1][index] = self.coffee_features(waypts[index+1])
+			elif self.task == HUMAN_TASK:
+				features[1][index] = self.human_features(waypts[index+1],waypts[index])
 		return features
 
 	# -- Velocity -- #
@@ -234,6 +247,53 @@ class Planner(object):
 		feature = self.laptop_features(curr_waypt,prev_waypt)
 		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
+	# -- Distance to Human -- #
+
+	def human_features(self, waypt, prev_waypt):
+		"""
+		Computes laptop cost over waypoints, interpolating and
+		sampling between each pair to check for intermediate collisions
+		---
+		input trajectory, output scalar feature
+		"""
+		feature = 0.0
+		NUM_STEPS = 4
+		for step in range(NUM_STEPS):
+			inter_waypt = prev_waypt + (1.0 + step)/(NUM_STEPS)*(waypt - prev_waypt)
+			feature += self.human_dist(inter_waypt)
+		return feature
+
+	def human_dist(self, waypt):
+		"""
+		Computes distance from end-effector to laptop in xy coords
+		input trajectory, output scalar distance where 
+			0: EE is at more than 0.4 meters away from laptop
+			+: EE is closer than 0.4 meters to laptop
+		"""
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		coords = robotToCartesian(self.robot)
+		EE_coord_xy = coords[6][0:2]
+		human_xy = np.array(HUMAN_CENTER[0:2])
+		dist = np.linalg.norm(EE_coord_xy - human_xy) - 0.4
+		if dist > 0:
+			return 0
+		return -dist
+
+	def human_cost(self, waypt):
+		"""
+		Computes the total distance to laptop cost
+		---
+		input trajectory, output scalar cost
+		"""
+		prev_waypt = waypt[0:7]
+		curr_waypt = waypt[7:14]
+		feature = self.human_features(curr_waypt,prev_waypt)
+		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
+
+
 	# -- Mirror -- #
 
 	def mirror_cost(self, waypt):
@@ -251,8 +311,8 @@ class Planner(object):
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
 		self.robot.SetDOFValues(waypt)
-		coords = robotToCartesian(self.robot)
-		EE_coord_z = coords[6][2]
+		EE_link = self.robot.GetLinks()[10]
+		EE_coord_z = EE_link.GetTransform()[2][3]
 		if EE_coord_z > 0:
 			EE_coord_z = 0
 		return -EE_coord_z
@@ -335,6 +395,8 @@ class Planner(object):
 				prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
 			elif self.task == COFFEE_TASK:
 				prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
+			elif self.task == HUMAN_TASK:
+				prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
 
 		for t in range(1,self.num_waypts_plan - 1):
@@ -377,6 +439,9 @@ class Planner(object):
 			elif self.task == COFFEE_TASK:
 				update_gain = 2.0
 				max_weight = 1.0
+			elif self.task == HUMAN_TASK:
+				update_gain = 100.0
+				max_weight = 10.0
 
 			update = Phi_p - Phi
 			curr_weight = self.weights - update_gain*update[1]

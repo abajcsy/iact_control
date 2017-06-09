@@ -97,7 +97,6 @@ class ExperimentUtils(object):
 		values = data[ID][task][method]
 
 		
-
 	def total_traj_T(self, ID, task, method):
 		"""
 		Gets total trajectory time for participant during task with method.
@@ -413,9 +412,44 @@ class ExperimentUtils(object):
 			out.write('\n')
 		out.close()
 
-	def save_trackedTraj(self, filename):
+	def save_original_traj(self, filename):
 		"""
-		TODO: THIS IS WRONG
+		Saves the originally planned trajectory to CSV file.
+		"""
+
+		# get the current script path
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		filepath = here + subdir + filename 
+
+		with open(filepath, 'w') as out:
+			for j in range(7):
+				out.write('j%d' % j)
+				for pt in range(len(self.tracked_traj)):
+					out.write(',%f' % self.tracked_traj[pt][j])
+				out.write('\n')
+		out.close()
+
+	def save_deformed_traj(self, filename):
+		"""
+		Saves the deformed trajectory to CSV file.
+		"""
+
+		# get the current script path
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		filepath = here + subdir + filename 
+
+		with open(filepath, 'w') as out:
+			for j in range(7):
+				out.write('j%d' % j)
+				for pt in range(len(self.deformed_traj)):
+					out.write(',%f' % self.deformed_traj[pt][j])
+				out.write('\n')
+		out.close()
+
+	def save_tracked_traj(self, filename):
+		"""
 		Saves the measured positions of the trajectory to CSV file. 
 		"""	
 
@@ -426,11 +460,14 @@ class ExperimentUtils(object):
 
 		with open(filepath, 'w') as out:
 			out.write('total_trajT: %f\n' % (self.endT-self.startT))
-			out.write('time,j1,j2,j3,j4,j5,j6,j7\n')
-			for t in range(len(self.tracked_traj)):
-				out.write('%f' % self.tracked_traj[t][0])
-				for j in range(1,len(self.tracked_traj[t])):
-					out.write(',%f' % self.tracked_traj[t][j])
+			out.write('time')
+			for t in range(len(self.tracked_traj[:,0])):
+				out.write(',%f' % self.tracked_traj[t][0])		
+			out.write('\n')					
+			for j in range(1,8):
+				out.write('j%d' % j)
+				for waypt in self.tracked_traj[:,j]:
+					out.write(',%f' % waypt)
 				out.write('\n')
 		out.close()
 
