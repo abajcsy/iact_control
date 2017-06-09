@@ -35,7 +35,7 @@ def initialize(model_filename='jaco', envXML=None):
 	robot.SetDOFValues(robot_starting_dofs)
 
 	viewer = env.GetViewer()
-	viewer.SetSize(1000,1000)
+	#viewer.SetSize(500,500)
 	cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
 		   [ 0.02495645,  0.68697757, -0.72624996,  2.04733515],
 		   [ 0.04076329, -0.72657133, -0.68588079,  1.67818344],
@@ -127,6 +127,25 @@ def plotTable(env):
 			                     [0.0, 0.0,  0.0, 1.0]]))
 	color = np.array([0.9, 0.75, 0.75])
 	table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+
+def plotCabinet(env):
+	"""
+	Plots the cabinet in OpenRAVE.
+	"""
+	# load table into environment
+	objects_path = find_in_workspaces(
+			project='iact_control',
+			path='src/data',
+			first_match_only=True)[0]
+	env.Load('{:s}/cabinet.xml'.format(objects_path))
+	cabinet = env.GetKinBody('cabinet')
+	cabinet.SetTransform(np.array([[0.0, -1.0,  0.0, 0.6],
+  								 [1.0, 0.0,  0.0, 0],
+			                     [0.0, 0.0,  1.0, 0], 
+			                     [0.0, 0.0,  0.0, 1.0]]))
+	color = np.array([0.05,0.6,0.3])
+	cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
+
 
 def plotMan(env):
 	"""

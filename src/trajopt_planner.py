@@ -76,6 +76,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
+		plotCabinet(self.env)
 		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
 		plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
 	

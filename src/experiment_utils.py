@@ -13,10 +13,9 @@ import copy
 import csv
 import os
 
-# measure total trajectory time
-# measure torque_H over time
-# measure interaction time (total)
-# measure smoothness
+import openrave_utils
+from openrave_utils import *
+
 
 class ExperimentUtils(object):
 	
@@ -329,6 +328,57 @@ class ExperimentUtils(object):
 			fig.savefig(datapath+"avgEffort.png", bbox_inches="tight")
 			print "Saved effort figure."
 
+	# ---- OpenRAVE Plotting ---- #
+
+	def plot_traj(self, dataType, filename):
+
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir + dataType
+
+		validTypes = ["deformed", "tracked", "original"]
+		if dataType not in validTypes:
+			print dataType + " is not a valid trajectory data type!"
+			return None
+
+		data = {}
+		with open(os.path.join(datapath, filename), 'r') as f:
+			# account for differently structured data between trajectories
+			if dataType is not "tracked":
+				lines = f.readlines()
+			elif dataType is "tracked":
+				 lines = f.readlines()[2:]
+			jnum = 0
+			for line in lines:
+				values = line.split(',')
+				final_values = [float(v) for v in values[1:len(values)]]
+				data[jnum] = final_values
+				jnum += 1
+
+		# get waypoints from file data
+		waypts = np.zeros((len(data[0]),7))
+		for i in range(len(data[0])):
+			jangles = []
+			for j in range(7):
+				jangles.append(data[j][i])
+			waypts[i] = np.array(jangles)		
+
+		print waypts		
+		# load openrave
+		model_filename = 'jaco_dynamics'
+		env, robot = initialize(model_filename)
+
+		# plot saved waypoints
+		bodies = []
+		plotTraj(env,robot,bodies,waypts)
+		plotTable(env)
+		plotTableMount(env,bodies)
+		plotLaptop(env,bodies)
+		plotCabinet(env)
+
+		time.sleep(25)
+
+
 	# ---- I/O Functionality ---- #
 
 	def parse_data(self, dataType):
@@ -516,14 +566,17 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
-	
+	dataType = "tracked"	
+	filename = "tracked03B.csv"
+	experi.plot_traj(dataType, filename)
+
 	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
 	#experi.update_tauH(0.2, np.array([1,2,3,4,5,6,7]))
 	#experi.update_weights(0.1,1.0)
 	#experi.update_weights(0.2,1.6)
 	#filename = "weights00A"
 	#experi.save_weights(filename)
-	experi.plot_avgEffort(saveFig=False)
+	#experi.plot_avgEffort(saveFig=False)
 	#experi.plot_tauH(0, 2, 'B')
 	#experi.plot_weights(0, 1, 'B',saveFig=False)
 	#experi.plot_tauH_together(3, 0, 'B')
