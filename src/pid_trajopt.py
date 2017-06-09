@@ -84,7 +84,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, p_gain, i_gain, d_gain, ID, task, methodType, demo):
+	def __init__(self, ID, task, methodType, demo, record):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -94,7 +94,8 @@ class PIDVelJaco(object):
 
 		# method type - A=IMPEDANCE, B=LEARNING
 		self.methodType = methodType
-		# optimal demo mode - F
+
+		# optimal demo mode
 		if demo == "F" or demo == "f":
 			self.demo = False
 		elif demo == "T" or demo == "t":
@@ -102,6 +103,15 @@ class PIDVelJaco(object):
 		else:
 			print "Oopse - it is unclear if you want demo mode. Turning demo mode off."
 			self.demo = False
+
+		# record experimental data mode 
+		if record == "F" or record == "f":
+			self.record = False
+		elif record == "T" or record == "t":
+			self.record = True
+		else:
+			print "Oopse - it is unclear if you want to record data. Not recording data."
+			self.record = False
 
 		# start admittance control mode
 		self.start_admittance_mode()
@@ -120,6 +130,7 @@ class PIDVelJaco(object):
 			elif self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
 				self.weights = 10
 
+		# initialize start/goal based on task 
 		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
 			pick = pick_shelf
 		else:
@@ -165,6 +176,9 @@ class PIDVelJaco(object):
 		self.joint_torques = np.zeros((7,1))
 
 		# P, I, D gains 
+		p_gain = 50.0
+		i_gain = 0.0
+		d_gain = 20.0
 		self.P = p_gain*np.eye(7)
 		self.I = i_gain*np.eye(7)
 		self.D = d_gain*np.eye(7)
@@ -206,19 +220,19 @@ class PIDVelJaco(object):
 		
 		print "----------------------------------"
 
-		# save and plot experimental data
-		if not self.demo:
+		# save experimental data (only if experiment started)
+		if self.record and self.reached_start:
 			print "Saving experimental data to file..."
-			weights_filename = "weights" + str(ID) + str(task) + methodType + ".csv"
-			force_filename = "force" + str(ID) + str(task) + methodType + ".csv"		
-			tracked_filename = "tracked" + str(ID) + str(task) + methodType + ".csv"
-			original_filename = "original" + str(ID) + str(task) + methodType + ".csv"
-			deformed_filename = "deformed" + str(ID) + str(task) + methodType + ".csv"		
+			weights_filename = "weights" + str(ID) + str(task) + methodType
+			force_filename = "force" + str(ID) + str(task) + methodType		
+			tracked_filename = "tracked" + str(ID) + str(task) + methodType
+			original_filename = "original" + str(ID) + str(task) + methodType
+			deformed_filename = "deformed" + str(ID) + str(task) + methodType		
 			self.expUtil.save_tauH(force_filename)	
-			self.expUtil.save_weights(weights_filename)
-			self.expUtil.save_tracked_traj(tracked_filename)
-			self.expUtil.save_original_traj(original_filename)
-			self.expUtil.save_deformed_traj(deformed_filename)
+			#self.expUtil.save_weights(weights_filename)
+			#self.expUtil.save_tracked_traj(tracked_filename)
+			#self.expUtil.save_original_traj(original_filename)
+			#self.expUtil.save_deformed_traj(deformed_filename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -395,16 +409,14 @@ class PIDVelJaco(object):
 			self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 8:
-		print "ERROR: Not enough arguments. Specify p_gains, i_gains, d_gains, ID, task, methodType, demo."
+	if len(sys.argv) < 6:
+		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record"
 	else:	
-		p_gains = float(sys.argv[1])
-		i_gains = float(sys.argv[2])
-		d_gains = float(sys.argv[3])
-		ID = int(sys.argv[4])
-		task = int(sys.argv[5])
-		methodType = sys.argv[6]
-		demo = sys.argv[7]
+		ID = int(sys.argv[1])
+		task = int(sys.argv[2])
+		methodType = sys.argv[3]
+		demo = sys.argv[4]
+		record = sys.argv[5]
 
-		PIDVelJaco(p_gains,i_gains,d_gains,ID,task,methodType,demo)
+		PIDVelJaco(ID,task,methodType,demo,record)
 	

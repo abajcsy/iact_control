@@ -27,7 +27,7 @@ class ExperimentUtils(object):
 		self.deformed_traj = None
 		# stores the list of positions as the robot is moving 
 		# in the form [timestamp, j1, j2, ... , j7]
-		self.tracked_traj = np.array([0.0]*8)
+		self.tracked_traj = None
 
 		# stores start and end time of the interaction
 		self.startT = 0.0
@@ -35,11 +35,11 @@ class ExperimentUtils(object):
 
 		# stores weights over time 
 		# always in the form [timestamp, weight]
-		self.weights = np.array([[0.0, 0.0]])
+		self.weights = None
 
 		# stores running list of forces applied by human
 		# in the form [timestamp, j1, j2, ... , j7]
-		self.tauH = np.array([0.0]*8).reshape((1,8))
+		self.tauH = None 
 
 	def update_original_traj(self, waypts):
 		"""
@@ -59,7 +59,10 @@ class ExperimentUtils(object):
 		Saves timestamp when this position was read
 		""" 
 		currTraj = np.append([timestamp], curr_pos.reshape(7))
-		self.tracked_traj = np.vstack([self.tracked_traj, currTraj])
+		if self.tracked_traj is None:
+			self.tracked_traj = np.array(currTraj)
+		else:	
+			self.tracked_traj = np.vstack([self.tracked_traj, currTraj])
 		
 	def update_tauH(self, timestamp, tau_h):
 		"""
@@ -67,14 +70,20 @@ class ExperimentUtils(object):
 		Saves timestamp when this torque was read
 		""" 
 		currTau = np.append([timestamp], tau_h.reshape(7))
-		self.tauH = np.vstack([self.tauH, currTau])
+		if self.tauH is None:
+			self.tauH = np.array(currTau)
+		else:
+			self.tauH = np.vstack([self.tauH, currTau])
 
 	def update_weights(self, timestamp, new_weight):
 		"""
 		Updates list of timestamped weights
 		"""
 		new_w = np.array([timestamp, new_weight])
-		self.weights = np.vstack([self.weights, new_w])
+		if self.weights is None:
+			self.weights = np.array(new_w)
+		else:
+			self.weights = np.vstack([self.weights, new_w])
 	
 	def set_startT(self,start_t):
 		"""
@@ -89,33 +98,36 @@ class ExperimentUtils(object):
 		self.endT = end_t
 
 	# ---- Computational Functionality ---- #
-	def total_interaction_T(self, ID, task, method):
-		"""
-		Gets total interaction time for participant during task with method.
-		"""
-		data = self.parse_data("weights")
-		values = data[ID][task][method]
+
+	#def total_interaction_T(self, ID, task, method):
+	#	"""
+	#	Gets total interaction time for participant during task with method.
+	#	"""
+	#	data = self.parse_data("weights")
+	#	values = data[ID][task][method]
+	# 	TODO IMPLEMENT THIS!
 
 		
-	def total_traj_T(self, ID, task, method):
-		"""
-		Gets total trajectory time for participant during task with method.
-		"""
-		#TODO IMPLEMENT THIS!
+	#def total_traj_T(self, ID, task, method):
+	#	"""
+	#	Gets total trajectory time for participant during task with method.
+	#	"""
+	#	#TODO IMPLEMENT THIS!
 
-	def total_interaction_F(self, ID, task, method): 
-		"""
-		Gets total force applied by participant during task with method.
-		"""
-		data = self.parse_data("weights")
-		values = data[ID][task][method]
+	#def total_interaction_F(self, ID, task, method): 
+	#	"""
+	#	Gets total force applied by participant during task with method.
+	#	"""
+	#	data = self.parse_data("weights")
+	#	values = data[ID][task][method]
+	#	TODO IMPLEMENT THIS!
 
 	# ---- Plotting Functionality ---- #
 
 	def plot_weights(self, ID, task, method,saveFig=False):
 		data = self.parse_data("weights")
 		values = data[ID][task][method]
-		print "values: " + str(values)
+
 		wT = values[0]
 		wV = values[1]
 
@@ -231,6 +243,7 @@ class ExperimentUtils(object):
 		B_means = [0.0]*N
 		B_std = [0.0]*N
 
+
 		for ID in data.keys():
 			for task in range(len(data[ID])):
 				Avalues = data[ID][task]['A']
@@ -334,37 +347,44 @@ class ExperimentUtils(object):
 
 		here = os.path.dirname(os.path.realpath(__file__))
 		subdir = "/data/experimental/"
-		datapath = here + subdir
+		datapath = here + subdir + dataType
 
-		if dataType != "force" and dataType != "traj" and dataType != "weights":
+		validTypes = ["force", "weights", "deformed", "tracked", "original"]
+		if dataType not in validTypes:
 			print dataType + " is not a valid data type!"
 			return None
 
 		data = {}
 		for filename in os.listdir(datapath):
-			if dataType in filename:
-				print filename
-				info = filename.split(dataType)[1]
-				ID = int(info[0])
-				task = int(info[1])
-				methodType = info[2]
+			print filename
+			info = filename.split(dataType)[1]
+			ID = int(info[0])
+			task = int(info[1])
+			methodType = info[2]
 
-				# sanity check if participant ID and experi# exist already
-				if ID not in data:
-					data[ID] = {}
-				if task not in data[ID]:
-					data[ID][task] = {}
-				with open(os.path.join(datapath, filename), 'r') as f:
-					methodData = [None]*8
-					if dataType == "weights": 
-						methodData = [None]*2					
-					i = 0
-					for line in f:
-						values = line.split(',')
-						final_values = [float(v) for v in values[1:len(values)]]
-						methodData[i] = final_values
-						i += 1
-					data[ID][task][methodType] = np.array(methodData)
+			# sanity check if participant ID and experi# exist already
+			if ID not in data:
+				data[ID] = {}
+			if task not in data[ID]:
+				data[ID][task] = {}
+			with open(os.path.join(datapath, filename), 'r') as f:
+				#TODO tracked has 9 rows [totalT, time, j1, j2, ...]
+				trajTypes = ["deformed", "original"]
+
+				methodData = [None]*8
+				if dataType == "weights": 
+					methodData = [None]*2
+				elif dataType in trajTypes:
+					methodData = [None]*7
+					
+				i = 0
+				for line in f:
+					values = line.split(',')
+					final_values = [float(v) for v in values[1:len(values)]]
+					methodData[i] = final_values
+					i += 1
+				print methodData
+				data[ID][task][methodType] = np.array(methodData)
 
 		return data				
 		
@@ -375,11 +395,13 @@ class ExperimentUtils(object):
 		"""	
 		# get the current script path
 		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		filepath = here + subdir + filename 
+		subdir = "/data/experimental/force/"
+		filepath = here + subdir + filename + "1.csv"
 
-		print self.tauH
-		print self.tauH.T
+		i = 2
+		while os.path.exists(filepath):
+			filepath = here+subdir+filename+str(i)+".csv"
+			i+=1
 
 		with open(filepath, 'w') as out:
 			for i in range(len(self.tauH.T)):
@@ -398,8 +420,13 @@ class ExperimentUtils(object):
 		"""	
 		# get the current script path
 		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		filepath = here + subdir + filename 
+		subdir = "/data/experimental/weights/"
+		filepath = here + subdir + filename + "1.csv"
+
+		i = 2
+		while os.path.exists(filepath):
+			filepath = here+subdir+filename+str(i)+".csv"
+			i+=1
 
 		with open(filepath, 'w') as out:
 			out.write('time')
@@ -419,14 +446,19 @@ class ExperimentUtils(object):
 
 		# get the current script path
 		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		filepath = here + subdir + filename 
+		subdir = "/data/experimental/original/"
+		filepath = here + subdir + filename + "1.csv"
+
+		i = 2
+		while os.path.exists(filepath):
+			filepath = here+subdir+filename+str(i)+".csv"
+			i+=1
 
 		with open(filepath, 'w') as out:
 			for j in range(7):
 				out.write('j%d' % j)
-				for pt in range(len(self.tracked_traj)):
-					out.write(',%f' % self.tracked_traj[pt][j])
+				for pt in range(len(self.original_traj)):
+					out.write(',%f' % self.original_traj[pt][j])
 				out.write('\n')
 		out.close()
 
@@ -437,8 +469,13 @@ class ExperimentUtils(object):
 
 		# get the current script path
 		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		filepath = here + subdir + filename 
+		subdir = "/data/experimental/deformed/"
+		filepath = here + subdir + filename + "1.csv"
+
+		i = 2
+		while os.path.exists(filepath):
+			filepath = here+subdir+filename+str(i)+".csv"
+			i+=1
 
 		with open(filepath, 'w') as out:
 			for j in range(7):
@@ -455,8 +492,13 @@ class ExperimentUtils(object):
 
 		# get the current script path
 		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		filepath = here + subdir + filename 
+		subdir = "/data/experimental/tracked/"
+		filepath = here + subdir + filename + "1.csv"
+
+		i = 2
+		while os.path.exists(filepath):
+			filepath = here+subdir+filename+str(i)+".csv"
+			i+=1
 
 		with open(filepath, 'w') as out:
 			out.write('total_trajT: %f\n' % (self.endT-self.startT))
@@ -474,8 +516,14 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
-
+	
+	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
+	#experi.update_tauH(0.2, np.array([1,2,3,4,5,6,7]))
+	#experi.update_weights(0.1,1.0)
+	#experi.update_weights(0.2,1.6)
+	#filename = "weights00A"
+	#experi.save_weights(filename)
 	experi.plot_avgEffort(saveFig=False)
-	#experi.plot_tauH(4, 0, 'B')
-	experi.plot_weights(4, 0, 'B',saveFig=False)
+	#experi.plot_tauH(0, 2, 'B')
+	#experi.plot_weights(0, 1, 'B',saveFig=False)
 	#experi.plot_tauH_together(3, 0, 'B')

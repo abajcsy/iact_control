@@ -491,7 +491,9 @@ class Planner(object):
 		self.curr_waypt_idx = 0
 		self.weights = weights
 		self.trajOpt(start, goal)
+		print "waypts_plan after trajopt: " + str(self.waypts_plan)
 		self.upsample(step_time)
+		print "waypts_plan after upsampling: " + str(self.waypts_plan)
 		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, [0, 0, 1])
 
 	def upsample(self, step_time):
