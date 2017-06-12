@@ -229,10 +229,10 @@ class PIDVelJaco(object):
 			original_filename = "original" + str(ID) + str(task) + methodType
 			deformed_filename = "deformed" + str(ID) + str(task) + methodType		
 			self.expUtil.save_tauH(force_filename)	
-			#self.expUtil.save_weights(weights_filename)
-			#self.expUtil.save_tracked_traj(tracked_filename)
-			#self.expUtil.save_original_traj(original_filename)
-			#self.expUtil.save_deformed_traj(deformed_filename)
+			self.expUtil.save_tracked_traj(tracked_filename)
+			self.expUtil.save_original_traj(original_filename)
+			self.expUtil.save_deformed_traj(deformed_filename)
+			self.expUtil.save_weights(weights_filename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -295,7 +295,8 @@ class PIDVelJaco(object):
 
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
-			print "--- INTERACTION ---"
+			#print "--- INTERACTION ---"
+			print "u_h: " + str(torque_curr)
 			if self.reached_start and not self.reached_goal:
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
@@ -374,16 +375,17 @@ class PIDVelJaco(object):
 				self.expUtil.set_startT(self.path_start_T)
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_weights(timestamp, self.weights)
+				print "updated weights: " + str(self.expUtil.weights)
 			else:
 				print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
 				# of the trajectory as the current target position
 				self.target_pos = self.start_pos
 		else:
-			print "REACHED START --> EXECUTING PATH"
+			#print "REACHED START --> EXECUTING PATH"
 
 			t = time.time() - self.path_start_T
-			print "t: " + str(t)
+			#print "t: " + str(t)
 
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)

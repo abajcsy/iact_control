@@ -59,7 +59,7 @@ class ExperimentUtils(object):
 		""" 
 		currTraj = np.append([timestamp], curr_pos.reshape(7))
 		if self.tracked_traj is None:
-			self.tracked_traj = np.array(currTraj)
+			self.tracked_traj = np.array([currTraj])
 		else:	
 			self.tracked_traj = np.vstack([self.tracked_traj, currTraj])
 		
@@ -70,7 +70,7 @@ class ExperimentUtils(object):
 		""" 
 		currTau = np.append([timestamp], tau_h.reshape(7))
 		if self.tauH is None:
-			self.tauH = np.array(currTau)
+			self.tauH = np.array([currTau])
 		else:
 			self.tauH = np.vstack([self.tauH, currTau])
 
@@ -80,7 +80,7 @@ class ExperimentUtils(object):
 		"""
 		new_w = np.array([timestamp, new_weight])
 		if self.weights is None:
-			self.weights = np.array(new_w)
+			self.weights = np.array([new_w])
 		else:
 			self.weights = np.vstack([self.weights, new_w])
 	
@@ -453,15 +453,20 @@ class ExperimentUtils(object):
 			filepath = here+subdir+filename+str(i)+".csv"
 			i+=1
 
+	
+		print "tau: " + str(self.tauH)
+		#print "len(tau): " + str(len(self.tauH))
+
 		with open(filepath, 'w') as out:
-			for i in range(len(self.tauH.T)):
-				if i == 0:
-					out.write('time')
-				else:
-					out.write('tau_j'+str(i))
-				for j in range(len(self.tauH.T[i])):
-					out.write(',%f' % self.tauH.T[i][j])
-				out.write('\n')
+			if self.tauH is not None:
+				for i in range(len(self.tauH.T)):
+					if i == 0:
+						out.write('time')
+					else:
+						out.write('tau_j'+str(i))
+					for j in range(len(self.tauH.T[i])):
+						out.write(',%f' % self.tauH.T[i][j])
+					out.write('\n')
 		out.close()
 
 	def save_weights(self, filename):
@@ -477,6 +482,9 @@ class ExperimentUtils(object):
 		while os.path.exists(filepath):
 			filepath = here+subdir+filename+str(i)+".csv"
 			i+=1
+
+		print "weights: " + str(self.weights[:,0])
+		#print "len(w): " + str(len(self.weights[:,0]))
 
 		with open(filepath, 'w') as out:
 			out.write('time')
@@ -517,23 +525,26 @@ class ExperimentUtils(object):
 		Saves the deformed trajectory to CSV file.
 		"""
 
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/deformed/"
-		filepath = here + subdir + filename + "1.csv"
+		if self.deformed_traj is not None:
+			# get the current script path
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/deformed/"
+			filepath = here + subdir + filename + "1.csv"
 
-		i = 2
-		while os.path.exists(filepath):
-			filepath = here+subdir+filename+str(i)+".csv"
-			i+=1
+			i = 2
+			while os.path.exists(filepath):
+				filepath = here+subdir+filename+str(i)+".csv"
+				i+=1
 
-		with open(filepath, 'w') as out:
-			for j in range(7):
-				out.write('j%d' % j)
-				for pt in range(len(self.deformed_traj)):
-					out.write(',%f' % self.deformed_traj[pt][j])
-				out.write('\n')
-		out.close()
+			with open(filepath, 'w') as out:
+				for j in range(7):
+					out.write('j%d' % j)
+					for pt in range(len(self.deformed_traj)):
+						out.write(',%f' % self.deformed_traj[pt][j])
+					out.write('\n')
+			out.close()
+		else:
+			print "No deformed trajectory to write."
 
 	def save_tracked_traj(self, filename):
 		"""
@@ -550,6 +561,8 @@ class ExperimentUtils(object):
 			filepath = here+subdir+filename+str(i)+".csv"
 			i+=1
 
+		print "sT: " + str(self.startT)
+		print "eT: " + str(self.endT)
 		with open(filepath, 'w') as out:
 			out.write('total_trajT: %f\n' % (self.endT-self.startT))
 			out.write('time')
@@ -566,8 +579,8 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
-	dataType = "tracked"	
-	filename = "tracked03B.csv"
+	dataType = "original"	
+	filename = "original11A1.csv"
 	experi.plot_traj(dataType, filename)
 
 	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
