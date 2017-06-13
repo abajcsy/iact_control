@@ -244,6 +244,7 @@ class ExperimentUtils(object):
 
 
 		for ID in data.keys():
+			print ID
 			for task in range(len(data[ID])):
 				Avalues = data[ID][task]['A']
 				Bvalues = data[ID][task]['B']
@@ -251,14 +252,14 @@ class ExperimentUtils(object):
 				Adata = Avalues[1:8]
 				Bdata = Bvalues[1:8]
 
-				A_means[ID-1] = np.mean(np.abs(Adata))
-				#A_std[ID-1] = np.std(np.abs(Adata))
+				A_means[ID] = np.mean(np.abs(Adata))
+				#A_std[ID] = np.std(np.abs(Adata))
 
-				B_means[ID-1] = np.mean(np.abs(Bdata))
-				#B_std[ID-1] = np.std(np.abs(Bdata))
+				B_means[ID] = np.mean(np.abs(Bdata))
+				#B_std[ID] = np.std(np.abs(Bdata))
 		
-		print A_means
-		print A_std
+		#print A_means
+		#print A_std
 
 		ind = np.arange(N)  # the x locations for the groups
 		width = 0.45       # the width of the bars
@@ -299,7 +300,7 @@ class ExperimentUtils(object):
 		ax.set_title('Average Human Effort for Experiment 1',fontsize=22)
 		ax.set_xticks(ind + width)
 
-		xlabels = ["P"+str(i+1) for i in range(N)]
+		xlabels = ["P"+str(ID) for ID in data.keys()]
 		ax.set_xticklabels(xlabels,fontsize=15)
 
 		# remove the plot frame lines
@@ -579,16 +580,14 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
-	dataType = "original"	
-	filename = "original11A1.csv"
+	dataType = "tracked"	
+	filename = "tracked23B1.csv"
 	experi.plot_traj(dataType, filename)
 
 	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
 	#experi.update_tauH(0.2, np.array([1,2,3,4,5,6,7]))
 	#experi.update_weights(0.1,1.0)
 	#experi.update_weights(0.2,1.6)
-	#filename = "weights00A"
-	#experi.save_weights(filename)
 	#experi.plot_avgEffort(saveFig=False)
 	#experi.plot_tauH(0, 2, 'B')
 	#experi.plot_weights(0, 1, 'B',saveFig=False)

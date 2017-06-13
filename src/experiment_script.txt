@@ -8,7 +8,7 @@ Turn on Kinova API:
 roslaunch kinova_bringup kinova_robot.launch kinova_robotType:=j2s7s300 use_urdf:=true
 
 Run experiment:
-roslaunch iact_control trajoptPID.launch ID:=4 task:=3 methodType:=A demo:=T
+roslaunch iact_control trajoptPID.launch ID:=4 task:=3 methodType:=A demo:=T record:=F
 
 ###########
 # Options #

@@ -296,7 +296,7 @@ class PIDVelJaco(object):
 		# if experienced large enough interaction force, then deform traj
 		if interaction:
 			#print "--- INTERACTION ---"
-			print "u_h: " + str(torque_curr)
+			#print "u_h: " + str(torque_curr)
 			if self.reached_start and not self.reached_goal:
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
@@ -377,7 +377,7 @@ class PIDVelJaco(object):
 				self.expUtil.update_weights(timestamp, self.weights)
 				print "updated weights: " + str(self.expUtil.weights)
 			else:
-				print "NOT AT START"
+				#print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
 				# of the trajectory as the current target position
 				self.target_pos = self.start_pos
