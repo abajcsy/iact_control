@@ -225,11 +225,16 @@ class ExperimentUtils(object):
 
 		plt.show()
 
-	def plot_avgEffort(self, saveFig=False):
+	def plot_avgEffort(self, saveFig=False, task=None):
 		"""
 		Takes all participant data files and produces bar chart
 		comparing average force exerted by each participant for trial
 		with Method A or Method B.
+		----
+		saveFig 	if True, saves final plot
+		task		task number to plot avg force for (1,2,3)
+					if task=None, then plots avg force over ALL 
+					tasks (not including familiarization) 
 		"""
 
 		data = self.parse_data("force")
@@ -242,24 +247,33 @@ class ExperimentUtils(object):
 		B_means = [0.0]*N
 		B_std = [0.0]*N
 
+		if task is None:
+			# average across ALL tasks
+			for ID in data.keys():
+				# dont include the familiarization task
+				for t in range(1,len(data[ID])):
+					Avalues = data[ID][t]['A']
+					Bvalues = data[ID][t]['B']
+					# only compute metrics over data, not timestamps
+					Adata = Avalues[1:8]
+					Bdata = Bvalues[1:8]
 
-		for ID in data.keys():
-			print ID
-			for task in range(len(data[ID])):
+					A_means[ID] += np.mean(np.abs(Adata))
+					B_means[ID] += np.mean(np.abs(Bdata))
+				A_means[ID] /= 3.0
+				B_means[ID] /= 3.0
+		else:
+			# average across SINGLE specified task
+			for ID in data.keys():
 				Avalues = data[ID][task]['A']
 				Bvalues = data[ID][task]['B']
-				# only compute metrics over data, not timestamps
+				
 				Adata = Avalues[1:8]
 				Bdata = Bvalues[1:8]
 
 				A_means[ID] = np.mean(np.abs(Adata))
-				#A_std[ID] = np.std(np.abs(Adata))
-
 				B_means[ID] = np.mean(np.abs(Bdata))
-				#B_std[ID] = np.std(np.abs(Bdata))
-		
-		#print A_means
-		#print A_std
+
 
 		ind = np.arange(N)  # the x locations for the groups
 		width = 0.45       # the width of the bars
@@ -297,7 +311,11 @@ class ExperimentUtils(object):
 		# add some text for labels, title and axes ticks
 		ax.set_ylabel('Avg Effort (Nm)',fontsize=15)
 		ax.set_xlabel('Participant Number',fontsize=15)
-		ax.set_title('Average Human Effort for Experiment 1',fontsize=22)
+		print task
+		if task is None:
+			ax.set_title('Average Human Effort for All Experiments',fontsize=22)
+		else:
+			ax.set_title('Average Human Effort for Task '+str(task),fontsize=22)
 		ax.set_xticks(ind + width)
 
 		xlabels = ["P"+str(ID) for ID in data.keys()]
@@ -312,6 +330,9 @@ class ExperimentUtils(object):
 		plt.ylim(0, 6)    
 		# Turn off tick labels
 		ax.set_yticklabels([])
+
+		# set max y-limit to 2 Nm
+		ax.set_ylim([0,2.0])
 
 		# ensure that the axis ticks only show up on left of the plot.  
 		ax.xaxis.set_ticks_position('none') 
@@ -580,15 +601,15 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
-	dataType = "tracked"	
-	filename = "tracked23B1.csv"
-	experi.plot_traj(dataType, filename)
+	#dataType = "tracked"	
+	#filename = "tracked53B1.csv"
+	#experi.plot_traj(dataType, filename)
 
 	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
 	#experi.update_tauH(0.2, np.array([1,2,3,4,5,6,7]))
 	#experi.update_weights(0.1,1.0)
 	#experi.update_weights(0.2,1.6)
-	#experi.plot_avgEffort(saveFig=False)
+	experi.plot_avgEffort(saveFig=False, task=1)
 	#experi.plot_tauH(0, 2, 'B')
 	#experi.plot_weights(0, 1, 'B',saveFig=False)
 	#experi.plot_tauH_together(3, 0, 'B')
