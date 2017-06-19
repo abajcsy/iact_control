@@ -76,7 +76,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
-		plotCabinet(self.env)
+		#plotCabinet(self.env)
 		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
 		plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
 	
@@ -564,6 +564,13 @@ class Planner(object):
 		
 		self.robot.SetDOFValues(pos)
 
+	def kill_planner(self):
+		"""
+		Destroys openrave thread and environment for clean shutdown
+		"""
+		self.env.Destroy()
+		RaveDestroy() # destroy the runtime
+	
 if __name__ == '__main__':
 
 	time.sleep(50)

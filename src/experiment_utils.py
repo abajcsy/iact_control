@@ -352,6 +352,35 @@ class ExperimentUtils(object):
 
 	# ---- OpenRAVE Plotting ---- #
 
+	def upsample(self, waypts_plan, start_time, final_time, step_time):
+		"""
+		Put waypoints along trajectory at step_time increments.
+		---
+		input desired time increment, update upsampled trajectory
+		"""
+		num_waypts = int(math.ceil((final_time - start_time)/step_time)) + 1
+		waypts = np.zeros((num_waypts,7))
+		waypts_time = [None]*num_waypts
+
+		num_waypts_plan = 4 # len(waypts_plan)
+		step_time_plan = (final_time - start_time)/(num_waypts_plan - 1)
+		t = start_time
+		for i in range(num_waypts):
+			if t >= final_time:
+				waypts_time[i] = final_time
+				waypts[i,:] = waypts_plan[num_waypts_plan - 1]
+			else:
+				deltaT = t - start_time
+				prev_idx = int(deltaT/step_time_plan)
+				print prev_idx	
+				print num_waypts			
+				prev = waypts_plan[prev_idx]
+				next = waypts_plan[prev_idx + 1]
+				waypts_time[i] = t
+				waypts[i,:] = prev+((t-prev_idx*step_time_plan)/step_time_plan)*(next-prev)
+			t += step_time
+		return waypts
+
 	def plot_traj(self, dataType, filename):
 
 		here = os.path.dirname(os.path.realpath(__file__))
@@ -400,8 +429,102 @@ class ExperimentUtils(object):
 
 		time.sleep(25)
 
+	def plot_allTraj(self, ID, task, method, trial):
+		"""
+		Plots all three trajectories (tracked, deformed, original)
+		for specified participant and trial and task with method
+		"""
+	
+		if method is "B":
+			file1 = "deformed" + str(ID) + str(task) + method + str(trial) + ".csv"
+			# parse waypts from file
+			waypts = self.parse_traj("deformed", file1)
+			waypts = self.upsample(waypts, 0.0, 15.0, 0.5)
+
+		# parse waypts from file
+		file2 = "tracked" + str(ID) + str(task) + method + str(trial) + ".csv"
+		waypts2 = self.parse_traj("tracked", file2)
+
+		file3 = "original" + str(ID) + str(task) + method + str(trial) + ".csv"
+		# parse waypts from file
+		waypts3 = self.parse_traj("original", file3)
+		waypts3 = self.upsample(waypts3, 0.0, 15.0, 0.5)
+
+		# load openrave
+		model_filename = 'jaco_dynamics'
+		env, robot = initialize(model_filename)
+
+		# plot saved waypoints
+		bodies = []		
+		if method is "B":
+			plotTraj(env,robot,bodies,waypts)
+		plotTraj(env,robot,bodies,waypts2,color=[1, 0, 0])
+		plotTraj(env,robot,bodies,waypts3,color=[0, 0, 1])
+		plotTable(env)
+		plotTableMount(env,bodies)
+		plotLaptop(env,bodies)
+		#plotCabinet(env)
+
+		time.sleep(25)
+
+	# ---- Trajectory Analysis Functionality ----#
+
+	def featurize_traj(self, dataType, filename):
+		"""
+		Takes trajectory file and featurizes it. 
+		"""
+		# parse waypts from file
+		waypts = self.parse_traj(dataType, filename)
+
+		# get task number
+		values = filename.split(dataType)
+		taskNum = int(values[1][1])
+
+		print taskNum
+
+		plan = Planner(taskNum)		
+		features = plan.featurize(waypts)
+ 	
+		print "features: " + str(features)
+		return features	
 
 	# ---- I/O Functionality ---- #
+
+	def parse_traj(self, dataType, filename):
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir + dataType
+
+		validTypes = ["deformed", "tracked", "original"]
+		if dataType not in validTypes:
+			print dataType + " is not a valid trajectory data type!"
+			return None
+
+		data = {}
+		with open(os.path.join(datapath, filename), 'r') as f:
+			# account for differently structured data between trajectories
+			if dataType is not "tracked":
+				lines = f.readlines()
+			elif dataType is "tracked":
+				 lines = f.readlines()[2:]
+			jnum = 0
+			for line in lines:
+				values = line.split(',')
+				final_values = [float(v) for v in values[1:len(values)]]
+				data[jnum] = final_values
+				jnum += 1
+
+		# get waypoints from file data
+		waypts = np.zeros((len(data[0]),7))
+		for i in range(len(data[0])):
+			jangles = []
+			for j in range(7):
+				jangles.append(data[j][i])
+			waypts[i] = np.array(jangles)		
+
+		print "parsed trajectory: " + str(waypts)
+		return waypts
+
 
 	def parse_data(self, dataType):
 		"""
@@ -409,10 +532,10 @@ class ExperimentUtils(object):
 		an aggregate array of the data for all participants across all trials
 
 		Returns:
-		ID 1 --> [Task1 --> [Method A, Method B], Task2 --> [Method A, Method B]]
-		ID 2 --> [Task1 --> [Method A, Method B], Task2 --> [Method A, Method B]]
+		ID 1 --> [Task1 --> [Trial1 --> [Method A, Method B], Trial2 --> [Method A, Method B]], [Task2 --> ...]]
+		ID 2 --> [Task1 --> [Trial1 --> [Method A, Method B], Trial2 --> [Method A, Method B]], [Task2 --> ...]]
 		...
-		ID N --> [Task1 --> [Method A, Method B], Task2 --> [Method A, Method B]]
+		ID N --> [Task1 --> [Trial1 --> [Method A, Method B], Trial2 --> [Method A, Method B]], [Task2 --> ...]]
 		---
 		dataType - can be 'force' or 'traj'
 		"""
@@ -433,30 +556,38 @@ class ExperimentUtils(object):
 			ID = int(info[0])
 			task = int(info[1])
 			methodType = info[2]
+			trial = int(info[3])
 
 			# sanity check if participant ID and experi# exist already
 			if ID not in data:
 				data[ID] = {}
 			if task not in data[ID]:
 				data[ID][task] = {}
+			if trial not in data[ID][task]:
+				data[ID][task][trial] = {}
 			with open(os.path.join(datapath, filename), 'r') as f:
-				#TODO tracked has 9 rows [totalT, time, j1, j2, ...]
 				trajTypes = ["deformed", "original"]
 
 				methodData = [None]*8
 				if dataType == "weights": 
 					methodData = [None]*2
-				elif dataType in trajTypes:
+				elif dataType in ["deformed", "original"]:
 					methodData = [None]*7
-					
+				elif dataType is "tracked":
+					methodData = [None]*8
+				firstLine = True
 				i = 0
 				for line in f:
+					# skip first line in tracked that has totalT
+					if dataType is "tracked" and firstLine:
+						firstLine = False
+						continue
 					values = line.split(',')
 					final_values = [float(v) for v in values[1:len(values)]]
 					methodData[i] = final_values
 					i += 1
-				print methodData
-				data[ID][task][methodType] = np.array(methodData)
+				#print methodData
+				data[ID][task][trial][methodType] = np.array(methodData)
 
 		return data				
 		
