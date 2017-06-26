@@ -150,7 +150,7 @@ class ExperimentUtils(object):
 				# time:
 				#x = rects[i].get_x() + rects[i].get_width()
 				#y = std[i]+height+1
-git s
+
 				# effort:
 				x = rects[i].get_x() + rects[i].get_width()
 				y = std[i]+height+50
