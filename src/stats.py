@@ -111,8 +111,6 @@ def compute_effort(data):
 	"""
 	Given one participant's force measurements for one trial of one experiment
 	computes the total interaction time
-	-----
-	TODO: THIS IS WRONG!	
 	"""
 	# get only the data (no timestamps)
 	edata = data[1:8]
@@ -120,17 +118,16 @@ def compute_effort(data):
 	effort = 0.0
 	for t in range(w):
 		joint = edata[:,t]
-		norm = np.linalg.norm(joint)
-		effort += norm
+		#NOTE: used to be 2-norm: norm = np.linalg.norm(joint)
+		total = np.sum(np.abs(joint))
+		effort += total
 
 	return effort
 
 def compute_iactT(data):
 	"""
 	Given one participant's force measurements for one trial of one experiment
-	computes the total interaction time
-	-----
-	TODO: CHECK THIS!	
+	computes the total interaction time	
 	"""
 	# get only the timestamps
 	time = data[0]
@@ -144,8 +141,6 @@ def compute_reward(data, planner):
 	"""
 	Given one participant's tracked trajectory for one trial of one experiment
 	computes the reward from this trajectory
-	-----
-	TODO: CHECK THIS!	
 	"""
 	# get only waypt data (no timestamps)
 	waypts = data[1:8].T
@@ -186,13 +181,82 @@ def compute_optimalReward(task):
 	goal = goalRad
 
 	plan = Planner(task)	
-	plan.replan(start, goal, weights, 0.0, T, 0.1)
-	r = plan.featurize(plan.waypts)
+	filename = None
+	if task == 1:
+		filename = "task1.csv"
+	elif task == 2:
+		filename = "task2.csv"
+	elif task == 3:
+		filename = "task3.csv"
+		
+	# get optimal waypts from file
+	waypts = get_opt_waypts(filename)
+	r = plan.featurize(waypts)
 	Rvel = r[0]
 	Rfeat = np.sum(r[1])
 
 	plan.kill_planner()
 	return (Rvel, Rfeat)
+
+def get_opt_waypts(filename):
+	"""
+	Reads the optimal waypoints from file
+	"""
+	# get ground truth for task 2 only!!!
+	here = os.path.dirname(os.path.realpath(__file__))
+	subdir = "/data/experimental/"
+	datapath = here + subdir + filename
+	firstline = True
+	waypts = None
+	with open(datapath, 'r') as f:
+		methodData = [None]*8
+		i = 0
+		for line in f:
+			# skip first line in tracked that has totalT
+			if firstline:
+				firstline = False
+				continue
+			values = line.split(',')
+			final_values = [float(v) for v in values[1:len(values)]]
+			methodData[i] = final_values
+			i += 1
+		data = np.array(methodData)
+		waypts = data
+	return waypts[1:8].T
+
+def get_opt_plan(task):
+	"""
+	Computes the optimal plan given a task
+	"""
+
+	T = 15.0
+	weights = 0
+	if task == TABLE_TASK or task == COFFEE_TASK:
+		weights = 1
+	elif task == LAPTOP_TASK:
+		weights = 10
+
+	# initialize start/goal based on task 
+	if task == COFFEE_TASK or task == HUMAN_TASK:
+		pick = pick_shelf
+	else:
+		pick = pick_basic
+
+	if task == LAPTOP_TASK:
+		place = place_higher
+	else:
+		place = place_lower
+		
+	startRad = np.array(pick)*(math.pi/180.0)
+	goalRad = np.array(place)*(math.pi/180.0)
+	start = startRad
+	goal = goalRad
+
+	plan = Planner(task)	
+	plan.replan(start, goal, weights, 0.0, T, 0.1)
+
+	plan.kill_planner()
+	return plan
 
 def compute_obj_metrics():
 	"""
@@ -306,7 +370,7 @@ def	reorganize_data(filename):
 	Restructures all data from participants into a single file for
 	objective measures and subjective measures.
 	"""
-	#obj_metrics = compute_obj_metrics()
+	obj_metrics = compute_obj_metrics()
 	subj_metrics = compute_subj_metrics()
 	
 	# write to file
@@ -327,7 +391,7 @@ def	reorganize_data(filename):
 					# trial can take values 1 or 2
 					for trial in obj_metrics[ID][task]:
 						for method in obj_metrics[ID][task][trial]:
-							row = "P"+str(ID)+",T"+str(task)+",A"+str(trial)+","+method
+							row = "P"+str(ID)+",T"+str(task)+","+str(trial)+","+method
 							out_obj.write(row)
 							for num in obj_metrics[ID][task][trial][method]:
 								out_obj.write(","+str(num))
@@ -347,8 +411,43 @@ def	reorganize_data(filename):
 		out_subj.write('\n')
 	out_subj.close()
 
+def test():
+	filename = "tracked111A1.csv"
+	here = os.path.dirname(os.path.realpath(__file__))
+	subdir = "/data/experimental/"
+	datapath = here + subdir + filename
+
+	firstline = True
+	with open(datapath, 'r') as f:
+		methodData = [None]*8
+		i = 0
+		for line in f:
+			# skip first line in tracked that has totalT
+			if firstline:
+				firstline = False
+				continue
+			values = line.split(',')
+			final_values = [float(v) for v in values[1:len(values)]]
+			methodData[i] = final_values
+			i += 1
+		data = np.array(methodData)
+		print data
+		plan = Planner(1)
+		res = compute_reward(data, plan)
+		print res
+
+
 if __name__ == '__main__':
-	#dataType = "force"
-	#p = t_test(dataType)
-	filename = "metrics"
+	filename = "new_metrics"
 	reorganize_data(filename)
+
+	#experi = ExperimentUtils()
+	#ID = 9
+	#task = 2
+	#method = "B"
+	#trial = 2
+	#plan = get_opt_waypts(task)
+	#experi.plot_trajDebug(plan)
+
+	#print compute_optimalReward(2)
+	

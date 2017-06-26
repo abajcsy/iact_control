@@ -3,6 +3,7 @@ from numpy import linalg
 from numpy import linspace
 from matplotlib import rc
 import matplotlib.pyplot as plt
+import matplotlib.lines as lines
 import time
 import scipy
 import math
@@ -16,6 +17,8 @@ import os
 import openrave_utils
 from openrave_utils import *
 
+import stats
+from stats import *
 
 class ExperimentUtils(object):
 	
@@ -96,205 +99,34 @@ class ExperimentUtils(object):
 		"""
 		self.endT = end_t
 
-	# ---- Computational Functionality ---- #
-
-	#def total_interaction_T(self, ID, task, method):
-	#	"""
-	#	Gets total interaction time for participant during task with method.
-	#	"""
-	#	data = self.parse_data("weights")
-	#	values = data[ID][task][method]
-	# 	TODO IMPLEMENT THIS!
-
-		
-	#def total_traj_T(self, ID, task, method):
-	#	"""
-	#	Gets total trajectory time for participant during task with method.
-	#	"""
-	#	#TODO IMPLEMENT THIS!
-
-	#def total_interaction_F(self, ID, task, method): 
-	#	"""
-	#	Gets total force applied by participant during task with method.
-	#	"""
-	#	data = self.parse_data("weights")
-	#	values = data[ID][task][method]
-	#	TODO IMPLEMENT THIS!
-
 	# ---- Plotting Functionality ---- #
 
-	def plot_weights(self, ID, task, method,saveFig=False):
-		data = self.parse_data("weights")
-		values = data[ID][task][method]
-
-		wT = values[0]
-		wV = values[1]
-
-		# fonts
-		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-		rc('text', usetex=True)
-
-		# colors 
-		c = ['b','g','r','c','m','y','#FF8C00']
-	
-		fig, ax = plt.subplots()
-		
-		fig.text(0.5, 0.92, 'Weight Update for Task ' + str(task), ha='center', fontsize=20)
-		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
-		fig.text(0.04, 0.5, 'theta', va='center', rotation='vertical', fontsize=18)
-
-		# plot the weights over time
-		base_line,  = plt.plot(wT, wV, '-', linewidth=3.0, color=c[0])
-	
-		ax.set_ylim([0,1.1])
-		ax.set_yticks(scipy.arange(0,1.1,0.5))
-	
-		# remove x-axis number labels
-		#ax.get_xaxis().set_visible(False)
-
-		# remove the plot frame lines
-		ax.spines["top"].set_visible(False)    
-		ax.spines["right"].set_visible(False)      
-		#ax.spines["bottom"].set_visible(False) 
-		#ax.spines["left"].set_visible(False)   
-
-		# Turn off tick labels
-		ax.xaxis.set_ticks_position('none') 
-		ax.yaxis.set_ticks_position('none') 
-
-		plt.show()
-
-		if saveFig:
-			here = os.path.dirname(os.path.realpath(__file__))
-			subdir = "/data/experimental/"
-			datapath = here + subdir
-			fig.savefig(datapath+"theta"+str(ID)+str(task)+method+".png", bbox_inches="tight")
-			print "Saved weight figure."
-
-	def plot_tauH(self, ID, task, method):
-		"""
-		Plots human-applied force from data file specified by:
-			force<ID><task><method>.csv
-		"""
-		data = self.parse_data("force")
-
-		values = data[ID][task][method]
-		tauT = values[0]
-		tauH = values[1:8]
-
-		# fonts
-		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-		rc('text', usetex=True)
-
-		# colors 
-		c = ['b','g','r','c','m','y','#FF8C00']
-	
-		fig, ax = plt.subplots(nrows=7, ncols=1, sharex=True, sharey=True)
-		
-		fig.text(0.5, 0.92, 'Human Interaction Forces During Experiment', ha='center', fontsize=20)
-		fig.text(0.5, 0.04, 'Time (s)', ha='center', fontsize=18)
-		fig.text(0.04, 0.5, '$u_H$ (Nm)', va='center', rotation='vertical', fontsize=18)
-
-		# plot joint_torques
-		for i in range(7):		
-			ax = plt.subplot(7, 1, i+1)
-			# plot the joint torque over time
-			base_line,  = plt.plot(tauT, tauH[i], '-', linewidth=3.0, color=c[i])
-		
-			ax.set_ylim([-30,30])
-			ax.set_yticks(scipy.arange(-30,31,15))
-			plt.ylabel("Joint " + str(i+1), fontsize=15)
-
-			ax.set_xlim([0, np.amax(tauT)])
-			# remove x-axis number labels
-			ax.get_xaxis().set_visible(False)
-
-			# remove the plot frame lines
-			ax.spines["top"].set_visible(False)    
-			ax.spines["right"].set_visible(False)      
-			ax.spines["bottom"].set_visible(False)   
-
-			if i == 6:
-				# only for the last graph show the bottom axis
-				ax.get_xaxis().set_visible(True)
-				ax.spines["bottom"].set_visible(True)  	
-
-			# Turn off tick labels
-			ax.xaxis.set_ticks_position('none') 
-			ax.yaxis.set_ticks_position('none') 
-
-		plt.show()
-
-	def plot_avgEffort(self, saveFig=False, task=None):
-		"""
-		Takes all participant data files and produces bar chart
-		comparing average force exerted by each participant for trial
-		with Method A or Method B.
-		----
-		saveFig 	if True, saves final plot
-		task		task number to plot avg force for (1,2,3)
-					if task=None, then plots avg force over ALL 
-					tasks (not including familiarization) 
-		"""
-
-		data = self.parse_data("force")
-
-		N = len(data.keys()) # number participants
-
-		A_means = [0.0]*N
-		A_std = [0.0]*N
-
-		B_means = [0.0]*N
-		B_std = [0.0]*N
-
-		if task is None:
-			# average across ALL tasks
-			for ID in data.keys():
-				# dont include the familiarization task
-				for t in range(1,len(data[ID])):
-					Avalues = data[ID][t]['A']
-					Bvalues = data[ID][t]['B']
-					# only compute metrics over data, not timestamps
-					Adata = Avalues[1:8]
-					Bdata = Bvalues[1:8]
-
-					A_means[ID] += np.mean(np.abs(Adata))
-					B_means[ID] += np.mean(np.abs(Bdata))
-				A_means[ID] /= 3.0
-				B_means[ID] /= 3.0
-		else:
-			# average across SINGLE specified task
-			for ID in data.keys():
-				Avalues = data[ID][task]['A']
-				Bvalues = data[ID][task]['B']
-				
-				Adata = Avalues[1:8]
-				Bdata = Bvalues[1:8]
-
-				A_means[ID] = np.mean(np.abs(Adata))
-				B_means[ID] = np.mean(np.abs(Bdata))
-
-
-		ind = np.arange(N)  # the x locations for the groups
+	def plotting(self, avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
+		ind = np.arange(3)  # the x locations for the groups
 		width = 0.45       # the width of the bars
+		offset = 0.15
 
 		# colors
-		redC = (214/255., 39/255., 40/255.)
-		greenC = (44/255., 160/255., 44/255.)
-		blueC = (31/255., 119/255., 180/255.)
-		orangeC = (255/255., 127/255., 14/255.)
+		blackC = "black"	#(214/255., 39/255., 40/255.)
+		greyC = "grey"		#(44/255., 160/255., 44/255.)
+		blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
+		orangeC = "#F79545" #(255/255., 127/255., 14/255.)
 
 		# fonts
 		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 		rc('text', usetex=True)
 
 		fig, ax = plt.subplots()
-		rectsA = ax.bar(ind, A_means, width, color=greenC, edgecolor="none")
-		rectsB = ax.bar(ind + width, B_means, width, color=orangeC, edgecolor="none")
 
 		# plots with stdev
-		#rectsA = ax.bar(ind, A_means, width, color=greenC, yerr=A_std, ecolor='k', edgecolor="none")
-		#rectsB = ax.bar(ind + width, B_means, width, color=orangeC, yerr=B_std, ecolor='k', edgecolor="none")
+		if avgOpt is None:
+			rectsA = ax.bar(ind+offset, avgA, width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+			rectsB = ax.bar(ind+width+offset, avgB, width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+		else: 
+			width = 0.25
+			rectsA = ax.bar(ind+offset, avgA, width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+			rectsB = ax.bar(ind+offset+width, avgB, width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+			rectsOpt = ax.bar(ind+offset+width*2, avgOpt, width, color=blueC,ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))		
 
 		def autolabel(rects):
 			"""
@@ -305,50 +137,309 @@ class ExperimentUtils(object):
 				ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,'%.2f' % 
 						height,ha='center', va='bottom', fontsize=15)
 
-		autolabel(rectsA)
-		autolabel(rectsB)
+		def autolabel_star(rects, std,p):
+			"""
+			Attach a text label above each bar displaying its height
+			"""
+			for i in range(len(rects)):
+				height = rects[i].get_height()
+				# cost:
+				#x = rects[i].get_x() + rects[i].get_width()*1.5
+				#y = std[i]+height+10
+
+				# time:
+				#x = rects[i].get_x() + rects[i].get_width()
+				#y = std[i]+height+1
+git s
+				# effort:
+				x = rects[i].get_x() + rects[i].get_width()
+				y = std[i]+height+50
+				print (x,y)
+				# time: x, y+0.1, widthB=2.5
+				# cost: x-0.12, y+0.8, widthB=1.8
+				# effort: x, y+10, widthB=2.5
+				ax.annotate(r'\textbf{*}', xy=(x,y), xytext=(x,y+10), xycoords='data', fontsize=18, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, widthB=2.5, lengthB=1.2', lw=1.5))
+				# time: y+0.8
+				# cost: y+6, x-0.12
+				# effort: y+60
+				ax.text(x,y+60,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
+
+		#ptime = []
+		#peffort = []
+		pcost = [0.001,0.001,0.001]
+		autolabel_star(rectsA,stdA,pcost)
+		#autolabel(rectsB)
 
 		# add some text for labels, title and axes ticks
-		ax.set_ylabel('Avg Effort (Nm)',fontsize=15)
-		ax.set_xlabel('Participant Number',fontsize=15)
-		print task
-		if task is None:
-			ax.set_title('Average Human Effort for All Experiments',fontsize=22)
-		else:
-			ax.set_title('Average Human Effort for Task '+str(task),fontsize=22)
-		ax.set_xticks(ind + width)
+		ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=20,labelpad=15)
+		ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=20,labelpad=15)
+		
+		plt.text(0.5, 1.08, r'\textbf{'+title+'}',
+				 horizontalalignment='center',
+				 fontsize=25,
+				 transform = ax.transAxes)
+		
+		ax.set_xticks(ind+width+offset)
+		if avgOpt is not None:
+			ax.set_xticks(ind+width+width/2+offset)
 
-		xlabels = ["P"+str(ID) for ID in data.keys()]
-		ax.set_xticklabels(xlabels,fontsize=15)
-
+		xlabels = ["Cup","Table","Laptop"]#["T"+str(t+1) for t in range(3)]
+		ax.set_xticklabels(xlabels,10,fontsize=18)
+ 
 		# remove the plot frame lines
 		ax.spines["top"].set_visible(False)    
 		ax.spines["right"].set_visible(False)      
-		ax.spines["bottom"].set_visible(False)    
-		ax.spines["left"].set_visible(False)    
+		
+		# set max y-limit 
+		ax.set_ylim([0,maxY])
+		ax.tick_params(labelsize=18)
 
-		plt.ylim(0, 6)    
-		# Turn off tick labels
-		ax.set_yticklabels([])
-
-		# set max y-limit to 2 Nm
-		ax.set_ylim([0,2.0])
+		# set padding for x and y tick labels
+		ax.tick_params(direction='out', pad=2)
 
 		# ensure that the axis ticks only show up on left of the plot.  
 		ax.xaxis.set_ticks_position('none') 
-		ax.yaxis.set_ticks_position('none') 
-		#ax.get_yaxis().tick_left()   		
+		ax.yaxis.set_ticks_position('none') 		
 
-		leg = ax.legend((rectsA[0], rectsB[0]), ('Impedance', 'Learning'), fontsize=15)
+
+		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Impedance}', r'\textbf{Learning}'), fontsize=18)
+		if avgOpt is not None:		
+			leg = ax.legend((rectsA[0], rectsB[0], rectsOpt[0]), (r'\textbf{Impedance}', r'\textbf{Learning}', r'\textbf{Desired}'), fontsize=18)
+
 		leg.get_frame().set_linewidth(0.0)
+		plt.show()
+
+		return fig
+
+	def plot_forceOverTime(self, filename, method="A",saveFig=False):
+		"""
+		Takes force file and plots human forces over time.
+		"""
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/force/"
+		datapath = here + subdir + filename		
+		tauH = None
+		with open(datapath, 'r') as f:
+			methodData = [None]*8
+			i = 0
+			for line in f:
+				values = line.split(',')
+				final_values = [float(v) for v in values[1:len(values)]]
+				methodData[i] = final_values
+				i += 1
+			data = np.array(methodData)
+			tauH = data
+
+		(h,w) = np.shape(tauH)
+		sumTau = np.zeros(w)
+		for i in range(w):
+			sumTau[i] = np.sum(np.abs(tauH[1:,i]))
+		
+		x = np.arange(0.0, 15.0, 0.1)
+		y = [0.0]*len(x)
+		count = 0
+		time = tauH[0,:]
+		print time
+		t = time[count]
+		for i in range(len(time)):
+			val = int(np.floor(time[i]*10))
+			y[val] = sumTau[i]
+
+		# fonts
+		rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+		rc('text', usetex=True)
+
+		fig, ax = plt.subplots()
+		fig.set_size_inches(30.0, 5.5, forward=True)
+
+		title_text = r'\textbf{Human Interaction Effort With Impedance}'
+
+		if method is "B":
+			title_text = r'\textbf{Human Interaction Effort With Learning}'
+		plt.text(0.5, 1.03, title_text,
+				 horizontalalignment='center',
+				 fontsize=25,
+				 transform = ax.transAxes)
+		
+		# remove the plot frame lines
+		ax.spines["top"].set_visible(False)    
+		ax.spines["right"].set_visible(False)      
+		
+		# set max y-limit 
+		ax.set_ylim([0,20])
+		ax.tick_params(labelsize=18)
+
+		# set padding for x and y tick labels
+		ax.tick_params(direction='out', pad=2)
+
+		# ensure that the axis ticks only show up on left of the plot.  
+		ax.xaxis.set_ticks_position('none') 
+		ax.yaxis.set_ticks_position('none') 		
+
+		ax.set_xlabel(r'\textbf{Time (s)}',fontsize=20,labelpad=15)
+		ax.set_ylabel(r'\textbf{Total Force (Nm)}',fontsize=20,labelpad=15)
+		
+		greyC = "grey"		
+		orangeC = "#F79545"
+		c = greyC
+		if method is "B":
+			c = orangeC
+
+		plt.plot(x,y,color=c, linewidth=5)
 		plt.show()
 
 		if saveFig:
 			here = os.path.dirname(os.path.realpath(__file__))
 			subdir = "/data/experimental/"
 			datapath = here + subdir
-			fig.savefig(datapath+"avgEffort.png", bbox_inches="tight")
-			print "Saved effort figure."
+			if method is "A":
+				fig.savefig(datapath+"force_over_timeA.pdf", bbox_inches="tight")
+			else:
+				fig.savefig(datapath+"force_over_timeB.pdf", bbox_inches="tight")
+			print "Saved effort figure." 
+
+
+	def plot_taskEffort(self, saveFig=False):
+		"""
+		Takes all participant data files and produces bar chart
+		comparing average force exerted by each participant for each task
+		----
+		saveFig 	if True, saves final plot
+		"""
+		#filename = "metrics_obj.csv"
+		filename = "new_metrics_obj.csv"
+		metrics = self.parse_metrics(filename)
+		# store avg for trial 1,2,3
+		sumA = [0.0,0.0,0.0]
+		sumB = [0.0,0.0,0.0]
+
+		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
+		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		for ID in metrics.keys():
+			for task in metrics[ID]:
+				trialAvgA = 0.0
+				trialAvgB = 0.0
+				for trial in metrics[ID][task]:
+					trialAvgA += metrics[ID][task][trial]["A"][6]
+					trialAvgB += metrics[ID][task][trial]["B"][6]
+				trialAvgA /= 2.0
+				trialAvgB /= 2.0
+				sumA[task-1] += trialAvgA
+				sumB[task-1] += trialAvgB
+	
+				pplA[task-1][ID] = trialAvgA
+				pplB[task-1][ID] = trialAvgB
+		avgA = [a/10.0 for a in sumA]
+		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
+		avgB = [b/10.0 for b in sumB]
+		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
+
+		# plot data
+		xlabel = "Task"
+		ylabel = "Total Effort (Nm)"
+		title = "Average Total Human Effort"	
+		maxY = 1000	
+		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
+
+		if saveFig:
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/"
+			datapath = here + subdir
+			fig.savefig(datapath+"taskEffort2.pdf", bbox_inches="tight")
+			print "Saved effort figure." 
+
+	def plot_taskEffortTime(self, saveFig=False):
+
+		filename = "metrics_obj.csv"
+		metrics = self.parse_metrics(filename)
+		# store avg for trial 1,2,3
+		sumA = [0.0,0.0,0.0]
+		sumB = [0.0,0.0,0.0]
+
+		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
+		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		for ID in metrics.keys():
+			for task in metrics[ID]:
+				trialAvgA = 0.0
+				trialAvgB = 0.0
+				for trial in metrics[ID][task]:
+					trialAvgA += metrics[ID][task][trial]["A"][7]
+					trialAvgB += metrics[ID][task][trial]["B"][7]
+				trialAvgA /= 2.0
+				trialAvgB /= 2.0
+				sumA[task-1] += trialAvgA
+				sumB[task-1] += trialAvgB
+	
+				pplA[task-1][ID] = trialAvgA
+				pplB[task-1][ID] = trialAvgB
+		avgA = [a/10.0 for a in sumA]
+		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
+		avgB = [b/10.0 for b in sumB]
+		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
+
+		# plot data
+		xlabel = "Task"
+		ylabel = "Interact Time (s)"
+		title = "Average Total Interaction Time"	
+		maxY = 16.0
+		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
+
+		if saveFig:
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/"
+			datapath = here + subdir
+			fig.savefig(datapath+"taskTime.pdf", bbox_inches="tight")
+			print "Saved time figure."
+
+
+	def plot_taskCost(self, saveFig=False):
+
+		filename = "metrics_obj.csv"
+		metrics = self.parse_metrics(filename)
+		# store avg for trial 1,2,3
+	
+		optimal = [0.0,0.0,0.0]
+
+		sumA = [0.0,0.0,0.0]
+		sumB = [0.0,0.0,0.0]
+
+		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
+		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		for ID in metrics.keys():
+			for task in metrics[ID]:
+				trialAvgA = 0.0
+				trialAvgB = 0.0
+				for trial in metrics[ID][task]:
+					trialAvgA += metrics[ID][task][trial]["A"][1]
+					trialAvgB += metrics[ID][task][trial]["B"][1]
+				# doesn't matter which one you choose, optimal is always opt
+				optimal[task-1] = metrics[ID][task][1]["B"][3]
+
+				trialAvgA /= 2.0
+				trialAvgB /= 2.0
+				sumA[task-1] += trialAvgA
+				sumB[task-1] += trialAvgB
+	
+				pplA[task-1][ID] = trialAvgA
+				pplB[task-1][ID] = trialAvgB
+		avgA = [a/10.0 for a in sumA]
+		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
+		avgB = [b/10.0 for b in sumB]
+		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
+
+		xlabel = "Task"
+		ylabel = r"Cost Value"
+		title = r"Average Cost Across Tasks"	
+		maxY = 100.0
+		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY,optimal)
+
+		if saveFig:
+			here = os.path.dirname(os.path.realpath(__file__))
+			subdir = "/data/experimental/"
+			datapath = here + subdir
+			fig.savefig(datapath+"taskCost.pdf", bbox_inches="tight")
+			print "Saved cost figure."
+
 
 	# ---- OpenRAVE Plotting ---- #
 
@@ -435,11 +526,11 @@ class ExperimentUtils(object):
 		for specified participant and trial and task with method
 		"""
 	
-		if method is "B":
-			file1 = "deformed" + str(ID) + str(task) + method + str(trial) + ".csv"
-			# parse waypts from file
-			waypts = self.parse_traj("deformed", file1)
-			waypts = self.upsample(waypts, 0.0, 15.0, 0.5)
+		#if method is "B":
+		#	file1 = "deformed" + str(ID) + str(task) + method + str(trial) + ".csv"
+		#	# parse waypts from file
+		#	waypts = self.parse_traj("deformed", file1)
+		#	waypts = self.upsample(waypts, 0.0, 15.0, 0.1)
 
 		# parse waypts from file
 		file2 = "tracked" + str(ID) + str(task) + method + str(trial) + ".csv"
@@ -448,7 +539,7 @@ class ExperimentUtils(object):
 		file3 = "original" + str(ID) + str(task) + method + str(trial) + ".csv"
 		# parse waypts from file
 		waypts3 = self.parse_traj("original", file3)
-		waypts3 = self.upsample(waypts3, 0.0, 15.0, 0.5)
+		waypts3 = self.upsample(waypts3, 0.0, 15.0, 0.1)
 
 		# load openrave
 		model_filename = 'jaco_dynamics'
@@ -456,8 +547,8 @@ class ExperimentUtils(object):
 
 		# plot saved waypoints
 		bodies = []		
-		if method is "B":
-			plotTraj(env,robot,bodies,waypts)
+		#if method is "B":
+		#	plotTraj(env,robot,bodies,waypts)
 		plotTraj(env,robot,bodies,waypts2,color=[1, 0, 0])
 		plotTraj(env,robot,bodies,waypts3,color=[0, 0, 1])
 		plotTable(env)
@@ -465,7 +556,75 @@ class ExperimentUtils(object):
 		plotLaptop(env,bodies)
 		#plotCabinet(env)
 
-		time.sleep(25)
+		time.sleep(30)
+
+	def plot_ABOptTraj(self, waypts_opt, filenameA, filenameB, tasknum):
+		"""
+		Plots measured trajectory for Method A, Method B and optimal trajectory
+		given certain task
+		"""
+		# get ground truth for task 2 only!!!
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/tracked/"
+		datapathA = here + subdir + filenameA
+		datapathB = here + subdir + filenameB
+		firstline = True
+		wayptsA = None
+		with open(datapathA, 'r') as f:
+			methodData = [None]*8
+			i = 0
+			for line in f:
+				# skip first line in tracked that has totalT
+				if firstline:
+					firstline = False
+					continue
+				values = line.split(',')
+				final_values = [float(v) for v in values[1:len(values)]]
+				methodData[i] = final_values
+				i += 1
+			data = np.array(methodData)
+			wayptsA = data
+
+		firstline = True
+		wayptsB = None
+		with open(datapathB, 'r') as f:
+			methodData = [None]*8
+			i = 0
+			for line in f:
+				# skip first line in tracked that has totalT
+				if firstline:
+					firstline = False
+					continue
+				values = line.split(',')
+				final_values = [float(v) for v in values[1:len(values)]]
+				methodData[i] = final_values
+				i += 1
+			data = np.array(methodData)
+			wayptsB = data
+
+		# plot saved waypoints
+		bodies = []	
+		plan = Planner(tasknum)
+
+		blackC = [0,0,0] 	
+		greyC =  [0.5,0.5,0.5]		
+		blueC = [75/255.0,171/255.0,197/255.]
+		orangeC = [247/255.,149/255.,69/255.0] 
+
+		# impedance
+		#plotTraj(plan.env,plan.robot,bodies,wayptsA[1:8].T, color=greyC)
+		# learning
+		plotTraj(plan.env,plan.robot,bodies,wayptsB[1:8].T, color=orangeC)
+		# optimal
+		plotTraj(plan.env,plan.robot,bodies,waypts_opt,color=blueC)
+		# original
+		#file3 = "original0" + str(tasknum) + "A1.csv"
+		# parse waypts from file
+		#waypts_orig = self.parse_traj("original", file3)
+		#waypts_orig = self.upsample(waypts_orig, 0.0, 15.0, 0.1)
+		#plotTraj(plan.env,plan.robot,bodies,waypts_orig,color=blackC)
+
+		time.sleep(50)
 
 	# ---- Trajectory Analysis Functionality ----#
 
@@ -480,12 +639,8 @@ class ExperimentUtils(object):
 		values = filename.split(dataType)
 		taskNum = int(values[1][1])
 
-		print taskNum
-
 		plan = Planner(taskNum)		
 		features = plan.featurize(waypts)
- 	
-		print "features: " + str(features)
 		return features	
 
 	# ---- I/O Functionality ---- #
@@ -525,6 +680,39 @@ class ExperimentUtils(object):
 		print "parsed trajectory: " + str(waypts)
 		return waypts
 
+	def parse_metrics(self, filename):
+		"""
+		Parses cleaned CSV file with metrics per participant.
+		filename can be "metrics_obj.csv" or "metrics_subj.csv"
+		"""
+
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir + filename
+
+		data = {}
+		firstline = True
+		with open(datapath, 'r') as f:
+			for line in f:
+				# skip first line in tracked that has totalT
+				if firstline:
+					firstline = False
+					continue
+				values = line.split(',')
+				ID = int(values[0][1])
+				task = int(values[1][1])
+				trial = int(values[2])
+				method = values[3]
+				# sanity check if participant ID and experi# exist already
+				if ID not in data:
+					data[ID] = {}
+				if task not in data[ID]:
+					data[ID][task] = {}
+				if trial not in data[ID][task]:
+					data[ID][task][trial] = {}
+				#if method not in data[ID][task][trial]:
+				data[ID][task][trial][method] = [float(v) for v in values[4:len(values)]]
+		return data
 
 	def parse_data(self, dataType):
 		"""
@@ -732,15 +920,20 @@ class ExperimentUtils(object):
 if __name__ == '__main__':
 
 	experi = ExperimentUtils()
+	#task = 2
+	#opt_waypts = get_opt_waypts("task2.csv")
+	#filenameA = "tracked12A1.csv"
+	#filenameB = "tracked12B1.csv"
+	#experi.plot_ABOptTraj(opt_waypts,filenameA,filenameB, task)
+
+	#filename1 = "force12A1.csv"
+	#filename2 = "force12B1.csv"
+	#experi.plot_forceOverTime(filename2, method="B", saveFig=True)
+	
+	experi.plot_taskEffort(saveFig=True)
+	#experi.plot_taskEffortTime(saveFig=True)	
+	#experi.plot_taskCost(saveFig=True)
 	#dataType = "tracked"	
 	#filename = "tracked53B1.csv"
 	#experi.plot_traj(dataType, filename)
 
-	#experi.update_tauH(0.1, np.array([1,2,3,4,5,6,7]))
-	#experi.update_tauH(0.2, np.array([1,2,3,4,5,6,7]))
-	#experi.update_weights(0.1,1.0)
-	#experi.update_weights(0.2,1.6)
-	experi.plot_avgEffort(saveFig=False, task=1)
-	#experi.plot_tauH(0, 2, 'B')
-	#experi.plot_weights(0, 1, 'B',saveFig=False)
-	#experi.plot_tauH_together(3, 0, 'B')

@@ -20,7 +20,7 @@ def initialize(model_filename='jaco', envXML=None):
 	env = openravepy.Environment()
 	if envXML is not None:
 		env.LoadURI(envXML)
-	#env.SetViewer('qtcoin')
+	env.SetViewer('qtcoin')
 
 	# Assumes the robot files are located in the data folder of the
 	# kinova_description package in the catkin workspace.
@@ -34,13 +34,13 @@ def initialize(model_filename='jaco', envXML=None):
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
 	robot.SetDOFValues(robot_starting_dofs)
 
-	#viewer = env.GetViewer()
-	#viewer.SetSize(500,500)
+	viewer = env.GetViewer()
+	viewer.SetSize(500,500)
 	cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
 		   [ 0.02495645,  0.68697757, -0.72624996,  2.04733515],
 		   [ 0.04076329, -0.72657133, -0.68588079,  1.67818344],
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
-	#viewer.SetCamera(cam_params)
+	viewer.SetCamera(cam_params)
 	#viewer.SetBkgndColor([0.8,0.8,0.8])
 
 	return env, robot
@@ -79,30 +79,78 @@ def manipToCartesian(robot, offset_z):
 	offset = np.array([0,0,offset_z]).T
 	return xyz
 
+def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
+	"""
+	Plots trajectory of the cup
+	"""
+
+	for i in range(0,len(waypts),10):
+		waypoint = waypts[i]
+		dof = np.append(waypoint, np.array([1, 1, 1]))
+		dof[2] += math.pi
+		robot.SetDOFValues(dof)
+
+		links = robot.GetLinks()
+		manipTf = links[9].GetTransform() 
+
+		# load mug into environment
+		objects_path = find_in_workspaces(
+				project='iact_control',
+				path='src/data',
+				first_match_only=True)[0]
+		env.Load('{:s}/mug1.dae'.format(objects_path))
+		mug = env.GetKinBody('mug')
+		mug.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(np.array(color))
+		angle = -np.pi/2
+
+		rot_x = np.array([[1,0,0,0],[0,np.cos(angle),-np.sin(angle),0],[0,np.sin(angle),np.cos(angle),0],[0,0,0,1]]) 
+
+		rot_y = np.array([[np.cos(angle),0,np.sin(angle),0],[0,1,0,0],[-np.sin(angle),0,np.cos(angle),0],[0,0,0,1]]) 
+
+		rot_z = np.array([[np.cos(angle),-np.sin(angle),0,0],[np.sin(angle),0,np.cos(angle),0],[0,0,1,0],[0,0,0,1]]) 
+
+		trans = np.array([[0,0,0,-0.02],[0,0,0,0.02],[0,0,0,-0.02],[0,0,0,1]]) 
+
+		rotated = np.dot(manipTf+trans,rot_x)
+		mug.SetTransform(rotated)
+
+		body = mug
+		body.SetName("pt"+str(len(bodies)))
+		print mug.GetLinks()[0].GetGeometries()[0].GetDiffuseColor()
+		env.Add(body, True)
+		bodies.append(body)
+
+
 def plotTraj(env,robot,bodies,waypts, color=[0, 1, 0]):
 	"""
 	Plots the best trajectory found or planned
 	"""
-	for waypoint in waypts:
+	for i in range(0,len(waypts),3):
+		waypoint = waypts[i]
 		dof = np.append(waypoint, np.array([1, 1, 1]))
 		dof[2] += math.pi
 		robot.SetDOFValues(dof)
 		coord = robotToCartesian(robot)
-		plotPoint(env, bodies, coord[6], 0.005, color)
+		# sz=0.015
+		# 0.009
+		plotPoint(env, bodies, coord[6], 0.015, color)
 
 def plotPoint(env, bodies, coords, size=0.1, color=[0, 1, 0]):
 	"""
 	Plots a single cube point in OpenRAVE at coords(x,y,z) location
 	"""
 	with env:
-		c = np.array(color)
-		body = RaveCreateKinBody(env, '')
-		body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
-					  size, size, size]]))
-		body.SetName("pt"+str(len(bodies)))
-		env.Add(body, True)
-		body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c)
-		bodies.append(body)
+		#c = np.array(color)
+		#body = RaveCreateKinBody(env, '')
+
+		bodies.append(env.plot3(points=coords, pointsize=size, colors=(color[0],color[1],color[2]), drawstyle=1))
+
+		#body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
+		#			  size, size, size]]))
+		#body.SetName("pt"+str(len(bodies)))
+		#env.Add(body, True)
+		#body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c)
+		#bodies.append(body)
 
 def plotSphere(env, bodies, coords, size=0.1):
 	"""
@@ -146,6 +194,13 @@ def plotCabinet(env):
 	color = np.array([0.05,0.6,0.3])
 	cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 
+def plotMug(env):
+	# load table into environment
+	objects_path = find_in_workspaces(
+			project='iact_control',
+			path='src/data',
+			first_match_only=True)[0]
+	env.Load('{:s}/mug.xml'.format(objects_path))
 
 def plotMan(env):
 	"""
