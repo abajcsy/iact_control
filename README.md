@@ -2,7 +2,7 @@
 
 Control, planning, and learning system for physical human-robot interaction (pHRI) with a JACO2 7DOF robotic arm. 
 
-## Dependancies
+## Dependencies
 * Ubuntu 14.04, ROS Indigo, OpenRAVE, Python 2.7
 * or_trajopt, or_urdf, or_rviz, prpy, pr_ordata
 * kinova-ros
@@ -10,7 +10,7 @@ Control, planning, and learning system for physical human-robot interaction (pHR
 
 ## Running the Controllers
 ### Setting up the JACO2 Robot
-Turn on the robot with the on-button. Put it in home position by pressing and holding the center (yellow) button on the joystick.
+Turn the robot on and put it in home position by pressing and holding the center (yellow) button on the joystick.
  
 In a new terminal, turn on the Kinova API by typing:
 ```
@@ -23,7 +23,7 @@ roslaunch iact_control trajoptPID.launch ID:=0 task:=0 methodType:=A demo:=F rec
 ```
 Command-line options include:
 * `ID`: Participant/user identification number (for experiments and data saving)
-* `task`: Task number {familiarization = 0, task 1 (cup orientation) = 1, task 2 (dist to table) = 2, task 3 (dist to laptop) = 3}
+* `task`: Task number {Distance to human = 0, Cup orientation = 1, Distance to table = 2, Distance to laptop = 3}
 * `methodType`: Sets the pHRI control method {impedance control = A, impedance + learning from pHRI = B}
 * `demo`: Demonstrates the "optimal" way to perform the task {default = F, optimal demo = T}
 * `record`: Records the interaction forces, measured trajectories, and cost function weights for a task {record data = T, don't record = F}
