@@ -1,21 +1,33 @@
-# iact_control: InterACTive Control
+# iact_control: InterACTive Learning & Control
 
-Implementation of traditional and interactive control schemes for a Kinova 7DOF Jaco robotic arm. 
-ROS, Python, and Kinova API. Testing interaction integrated into planning. 
+Control, planning, and learning system for physical human-robot interaction (pHRI) with a JACO2 7DOF robotic arm. 
+
+## Dependancies
+* Ubuntu 14.04, ROS Indigo, OpenRAVE, Python 2.7
+* or_trajopt, or_urdf, or_rviz, prpy, pr_ordata
+* kinova-ros
+* fcl
 
 ## Running the Controllers
-### PID Controller 
-In the terminal, run:
+### Setting up the JACO2 Robot
+Turn on the robot with the on-button. Put it in home position by pressing and holding the center (yellow) button on the joystick.
+ 
+In a new terminal, turn on the Kinova API by typing:
 ```
-roslaunch iact_control jaco_pid_demo.launch
+roslaunch kinova_bringup kinova_robot.launch kinova_robotType:=j2s7s300 use_urdf:=true
 ```
-You can change the P,I, and D gains simply through the terminal by specifying:
+### Starting the controller, planner, and learning system
+In another terminal, run:
 ```
-roslaunch iact_control jaco_pid_demo.launch p_gain:=100 i_gain:=0 d_gain:=15
+roslaunch iact_control trajoptPID.launch ID:=0 task:=0 methodType:=A demo:=F record:=F
 ```
-You can also change the target goal configuration though the terminal by specifying:
-```
-roslaunch iact_control jaco_pid_demo.launch j0:=180 j1:=180 j2:=180 j3:=180 j4:=180 j5:=180 j5:=180 j6:=180    
-```
+Command-line options include:
+* `ID`: Participant/user identification number (for experiments and data saving)
+* `task`: Task number {familiarization = 0, task 1 (cup orientation) = 1, task 2 (dist to table) = 2, task 3 (dist to laptop) = 3}
+* `methodType`: Sets the pHRI control method {impedance control = A, impedance + learning from pHRI = B}
+* `demo`: Demonstrates the "optimal" way to perform the task {default = F, optimal demo = T}
+* `record`: Records the interaction forces, measured trajectories, and cost function weights for a task {record data = T, don't record = F}
+
 ### References
+* TrajOpt Planner: http://rll.berkeley.edu/trajopt/doc/sphinx_build/html/index.html
 * PID Control Reference: https://w3.cs.jmu.edu/spragunr/CS354/handouts/pid.pdf
