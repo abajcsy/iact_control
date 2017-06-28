@@ -8,7 +8,7 @@ Control, planning, and learning system for physical human-robot interaction (pHR
 * kinova-ros
 * fcl
 
-## Running the Controllers
+## Running the System
 ### Setting up the JACO2 Robot
 Turn the robot on and put it in home position by pressing and holding the center (yellow) button on the joystick.
  
