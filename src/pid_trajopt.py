@@ -148,7 +148,7 @@ class PIDVelJaco(object):
 
 		# create the trajopt planner and plan from start to goal
 		self.planner = trajopt_planner.Planner(self.task)
-		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 1.0)
 
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
@@ -228,11 +228,11 @@ class PIDVelJaco(object):
 			tracked_filename = "tracked" + str(ID) + str(task) + methodType
 			original_filename = "original" + str(ID) + str(task) + methodType
 			deformed_filename = "deformed" + str(ID) + str(task) + methodType		
-			self.expUtil.save_tauH(force_filename)	
+			#self.expUtil.save_tauH(force_filename)	
 			self.expUtil.save_tracked_traj(tracked_filename)
-			self.expUtil.save_original_traj(original_filename)
-			self.expUtil.save_deformed_traj(deformed_filename)
-			self.expUtil.save_weights(weights_filename)
+			#self.expUtil.save_original_traj(original_filename)
+			#self.expUtil.save_deformed_traj(deformed_filename)
+			#self.expUtil.save_weights(weights_filename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -299,30 +299,26 @@ class PIDVelJaco(object):
 			#print "u_h: " + str(torque_curr)
 			if self.reached_start and not self.reached_goal:
 				timestamp = time.time() - self.path_start_T
-				self.expUtil.update_tauH(timestamp, torque_curr)
 
-			if self.methodType == LEARNING:
-				self.weights = self.planner.learnWeights(torque_curr)
-				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+				if self.methodType == LEARNING:
+					self.weights = self.planner.learnWeights(torque_curr)
+					self.planner.replan(self.new_start, self.goal, self.weights, 0.0, self.T, 0.5)
 
-				# update the experimental data with new weights
-				timestamp = time.time() - self.path_start_T
-				self.expUtil.update_weights(timestamp, self.weights)
-
-				# store deformed trajectory
-				deformed_traj = self.planner.get_waypts_plan()
-				self.expUtil.update_deformed_traj(deformed_traj)
 
 	def joint_angles_callback(self, msg):
 		"""
 		Reads the latest position of the robot and publishes an
 		appropriate torque command to move the robot to the target
 		"""
+
+		
 		# read the current joint angles from the robot
 		curr_pos = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
 		# convert to radians
-		curr_pos = curr_pos*(math.pi/180.0)	
+		curr_pos = curr_pos*(math.pi/180.0)
+		#if self.reached_start:
+		#	self.planner.plotMyPoint(curr_pos.reshape((1,7)), 0.01, [0, 0, 1])
 
 		# update the OpenRAVE simulation 
 		#self.planner.update_curr_pos(curr_pos)
@@ -336,6 +332,7 @@ class PIDVelJaco(object):
 		if self.reached_start and not self.reached_goal:
 			# update the experimental data with new position
 			timestamp = time.time() - self.path_start_T
+			self.new_start = curr_pos.reshape((1,7))
 			self.expUtil.update_tracked_traj(timestamp, curr_pos)
 
 		# update cmd from PID based on current position
@@ -385,7 +382,7 @@ class PIDVelJaco(object):
 			#print "REACHED START --> EXECUTING PATH"
 
 			t = time.time() - self.path_start_T
-			#print "t: " + str(t)
+			print "t: " + str(t)
 
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)

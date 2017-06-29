@@ -51,8 +51,7 @@ class Planner(object):
 
 		# these variables are for trajopt
 		self.waypts_plan = None
-		self.num_waypts_plan = None
-		self.step_time_plan = None
+		self.num_waypts_plan = 4
 
 		# these variables are for the upsampled trajectory
 		self.waypts = None
@@ -76,9 +75,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotLaptop(self.env,self.bodies)
-		#plotCabinet(self.env)
-		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
-		#plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
+		plotCabinet(self.env)
 	
 		# ---- DEFORMATION Initialization ---- #
 
@@ -295,12 +292,6 @@ class Planner(object):
 		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
 
-	# -- Mirror -- #
-
-	def mirror_cost(self, waypt):
-		#TODO implement me!
-		return
-
 	# ---- custom constraints --- #
 
 	def table_constraint(self, waypt):
@@ -355,13 +346,9 @@ class Planner(object):
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
 
-		self.num_waypts_plan = 4
-		if self.waypts_plan == None:
-			init_waypts = np.zeros((self.num_waypts_plan,7))
-			for count in range(self.num_waypts_plan):
-				init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
-		else:
-			init_waypts = self.waypts_plan 
+		init_waypts = np.zeros((self.num_waypts_plan,7))
+		for count in range(self.num_waypts_plan):
+			init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
 		
 		request = {
 			"basic_info": {
@@ -398,16 +385,16 @@ class Planner(object):
 				prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			elif self.task == HUMAN_TASK:
 				prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
-			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
+			prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
 
 		for t in range(1,self.num_waypts_plan - 1):
 			prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "up%i"%t)
-			#prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
-			#prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
+			prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
+			prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
 
 		result = trajoptpy.OptimizeProblem(prob)
 		self.waypts_plan = result.GetTraj()
-		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
+
 
 
 
@@ -477,7 +464,19 @@ class Planner(object):
 		return (waypts_deform, waypts_prev)
 	
 
+
 	# ---- replanning, upsampling, and interpolating ---- #
+
+	def plotMyPoint(self,waypt,r,color):
+
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		EE_link = self.robot.GetLinks()[10]
+		EE_coord = EE_link.GetTransform()[0:3,3]
+		plotSphere(self.env,self.bodies,EE_coord,r,color)
+
 
 	def replan(self, start, goal, weights, start_time, final_time, step_time):
 		"""
@@ -487,53 +486,44 @@ class Planner(object):
 		"""
 		if weights == None:
 			return
-		self.start_time = start_time
-		self.final_time = final_time
-		self.curr_waypt_idx = 0
 		self.weights = weights
 		self.trajOpt(start, goal)
-		#print "waypts_plan after trajopt: " + str(self.waypts_plan)
-		self.upsample(step_time)
-		#print "waypts_plan after upsampling: " + str(self.waypts_plan)
-		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, [0, 0, 1])
+		self.upsample(start_time, final_time, step_time)
 
-	def upsample(self, step_time):
+
+	def upsample(self, start_time, final_time, step_time):
 		"""
 		Put waypoints along trajectory at step_time increments.
 		---
 		input desired time increment, update upsampled trajectory
 		"""
-		num_waypts = int(math.ceil((self.final_time - self.start_time)/step_time)) + 1
+		step_time_plan = (final_time - start_time)/(self.num_waypts_plan - 1.0)
+		num_waypts = int(math.ceil((final_time - start_time)/step_time)) + 1
 		waypts = np.zeros((num_waypts,7))
 		waypts_time = [None]*num_waypts
 		
-		t = self.start_time
+		t = start_time
 		for i in range(num_waypts):
-			if t >= self.final_time:
-				waypts_time[i] = self.final_time
+			if t >= final_time:
+				waypts_time[i] = final_time
 				waypts[i,:] = self.waypts_plan[self.num_waypts_plan - 1]
 			else:
-				deltaT = t - self.start_time
-				prev_idx = int(deltaT/self.step_time_plan)
+				deltaT = t - start_time
+				prev_idx = int(deltaT/step_time_plan)
+				prev_time = prev_idx*step_time_plan + start_time
 				prev = self.waypts_plan[prev_idx]
 				next = self.waypts_plan[prev_idx + 1]
 				waypts_time[i] = t
-				waypts[i,:] = prev+((t-prev_idx*self.step_time_plan)/self.step_time_plan)*(next-prev)
+				waypts[i,:] = prev+((t-prev_time)/step_time_plan)*(next-prev)
 			t += step_time
 		self.step_time = step_time
 		self.num_waypts = num_waypts
+		self.curr_waypt_idx = 0
+		self.start_time = start_time
+		self.final_time = final_time
 		self.waypts = waypts
 		self.waypts_time = waypts_time
 
-	def downsample(self):
-		"""
-		Updates the trajopt trajectory from the upsampled trajectory.
-		changes the trajopt waypoints between start and goal.
-		"""
-		for index in range(1,self.num_waypts_plan-1):
-			t = self.start_time + index*self.step_time_plan
-			target_pos = self.interpolate(t)
-			self.waypts_plan[index,:] = target_pos.reshape((1,7))
 			
 	def interpolate(self, curr_time):
 		"""
@@ -550,9 +540,11 @@ class Planner(object):
 			next = self.waypts[self.curr_waypt_idx + 1]
 			ti = self.waypts_time[self.curr_waypt_idx]
 			tf = self.waypts_time[self.curr_waypt_idx + 1]
-			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev		
+			target_pos = (next - prev)*((curr_time-ti)/(tf - ti)) + prev
+		#self.plotMyPoint(target_pos, 0.01, [0, 1, 0])
 		target_pos = np.array(target_pos).reshape((7,1))
 		return target_pos
+
 
 	def update_curr_pos(self, curr_pos):
 		"""
@@ -576,26 +568,3 @@ if __name__ == '__main__':
 	time.sleep(50)
 
 
-	"""
-	
-	cost = [0.0]*len(coords)
-		epsilon = 0.025
-		jointIdx = 0
-		for coord in coords:
-			dist = np.linalg.norm(coord[0:2] - laptop_xy) - 0.15
-			if dist < 0:
-				cost[jointIdx] = (-dist + 1/(2 * epsilon))*vel_mag
-			elif 0 < dist <= epsilon:
-				cost[jointIdx] = (1/(2 * epsilon) * (dist - epsilon)**2)*vel_mag
-			jointIdx += 1
-		return cost
-
-	def coffee_constraint_derivative(self, waypt):
-		if len(waypt) < 10:
-			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
-			waypt[2] += math.pi
-		self.robot.SetDOFValues(waypt)
-		world_dir = self.robot.GetLinks()[7].GetTransform()[:3,:3].dot([1,0,0])
-		return np.array([np.cross(self.robot.GetJoints()[i].GetAxis(), world_dir)[:2] for i in range(7)]).T.copy()
-
-	"""	
