@@ -155,14 +155,14 @@ class ExperimentUtils(object):
 				x = rects[i].get_x() + rects[i].get_width()
 				y = std[i]+height+50
 				print (x,y)
-				# time: x, y+0.1, widthB=2.5
-				# cost: x-0.12, y+0.8, widthB=1.8
-				# effort: x, y+10, widthB=2.5
-				ax.annotate(r'\textbf{*}', xy=(x,y), xytext=(x,y+10), xycoords='data', fontsize=18, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, widthB=2.5, lengthB=1.2', lw=1.5))
-				# time: y+0.8
+				# time: x, y+0.2, widthB=2.0
+				# cost: x-0.12, y+0.8, widthB=1.4
+				# effort: x, y+12, widthB=2.0
+				ax.annotate(r'\textbf{*}', xy=(x, y), xytext=(x, y+12), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, widthB=2.0, lengthB=1.2', lw=1.5))
+				# time: y+1.0
 				# cost: y+6, x-0.12
 				# effort: y+60
-				ax.text(x,y+60,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
+				#ax.text(x-0.12,y+6,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=20)
 
 		#ptime = []
 		#peffort = []
@@ -171,12 +171,12 @@ class ExperimentUtils(object):
 		#autolabel(rectsB)
 
 		# add some text for labels, title and axes ticks
-		ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=20,labelpad=15)
-		ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=20,labelpad=15)
+		ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=30,labelpad=15)
+		ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=30,labelpad=15)
 		
 		plt.text(0.5, 1.08, r'\textbf{'+title+'}',
 				 horizontalalignment='center',
-				 fontsize=25,
+				 fontsize=33,
 				 transform = ax.transAxes)
 		
 		ax.set_xticks(ind+width+offset)
@@ -184,7 +184,7 @@ class ExperimentUtils(object):
 			ax.set_xticks(ind+width+width/2+offset)
 
 		xlabels = ["Cup","Table","Laptop"]#["T"+str(t+1) for t in range(3)]
-		ax.set_xticklabels(xlabels,10,fontsize=18)
+		ax.set_xticklabels(xlabels,10,fontsize=30)
  
 		# remove the plot frame lines
 		ax.spines["top"].set_visible(False)    
@@ -192,7 +192,7 @@ class ExperimentUtils(object):
 		
 		# set max y-limit 
 		ax.set_ylim([0,maxY])
-		ax.tick_params(labelsize=18)
+		ax.tick_params(labelsize=30)
 
 		# set padding for x and y tick labels
 		ax.tick_params(direction='out', pad=2)
@@ -202,9 +202,9 @@ class ExperimentUtils(object):
 		ax.yaxis.set_ticks_position('none') 		
 
 
-		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Impedance}', r'\textbf{Learning}'), fontsize=18)
+		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Impedance}', r'\textbf{Learning}'), fontsize=23)
 		if avgOpt is not None:		
-			leg = ax.legend((rectsA[0], rectsB[0], rectsOpt[0]), (r'\textbf{Impedance}', r'\textbf{Learning}', r'\textbf{Desired}'), fontsize=18)
+			leg = ax.legend((rectsA[0], rectsB[0], rectsOpt[0]), (r'\textbf{Impedance}', r'\textbf{Learning}', r'\textbf{Desired}'), fontsize=23)
 
 		leg.get_frame().set_linewidth(0.0)
 		plt.show()
@@ -252,6 +252,7 @@ class ExperimentUtils(object):
 		fig, ax = plt.subplots()
 		fig.set_size_inches(30.0, 5.5, forward=True)
 
+		"""
 		title_text = r'\textbf{Human Interaction Effort With Impedance}'
 
 		if method is "B":
@@ -260,24 +261,30 @@ class ExperimentUtils(object):
 				 horizontalalignment='center',
 				 fontsize=25,
 				 transform = ax.transAxes)
+		"""
 		
 		# remove the plot frame lines
 		ax.spines["top"].set_visible(False)    
-		ax.spines["right"].set_visible(False)      
+		ax.spines["right"].set_visible(False)   
+		ax.spines["left"].set_visible(False)    
+		ax.spines["bottom"].set_visible(False)         
 		
 		# set max y-limit 
 		ax.set_ylim([0,20])
-		ax.tick_params(labelsize=18)
+		ax.tick_params(labelsize=25)
 
 		# set padding for x and y tick labels
-		ax.tick_params(direction='out', pad=2)
+		#ax.tick_params(direction='out', pad=2)
 
 		# ensure that the axis ticks only show up on left of the plot.  
 		ax.xaxis.set_ticks_position('none') 
-		ax.yaxis.set_ticks_position('none') 		
+		ax.yaxis.set_ticks_position('none') 	
+		# no axis labels
+		ax.set_yticklabels([])
+		ax.set_xticklabels([])	
 
-		ax.set_xlabel(r'\textbf{Time (s)}',fontsize=20,labelpad=15)
-		ax.set_ylabel(r'\textbf{Total Force (Nm)}',fontsize=20,labelpad=15)
+		ax.set_xlabel(r'\textbf{Time (s)}',fontsize=40,labelpad=15)
+		ax.set_ylabel(r'\textbf{Force}',fontsize=40,labelpad=15)
 		
 		greyC = "grey"		
 		orangeC = "#F79545"
@@ -285,7 +292,7 @@ class ExperimentUtils(object):
 		if method is "B":
 			c = orangeC
 
-		plt.plot(x,y,color=c, linewidth=5)
+		plt.plot(x,y,color=c, linewidth=12)
 		plt.show()
 
 		if saveFig:
@@ -307,7 +314,7 @@ class ExperimentUtils(object):
 		saveFig 	if True, saves final plot
 		"""
 		#filename = "metrics_obj.csv"
-		filename = "new_metrics_obj.csv"
+		filename = "metrics_obj2.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
@@ -350,7 +357,7 @@ class ExperimentUtils(object):
 
 	def plot_taskEffortTime(self, saveFig=False):
 
-		filename = "metrics_obj.csv"
+		filename = "metrics_obj2.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
@@ -381,7 +388,7 @@ class ExperimentUtils(object):
 		xlabel = "Task"
 		ylabel = "Interact Time (s)"
 		title = "Average Total Interaction Time"	
-		maxY = 16.0
+		maxY = 17.0
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
 
 		if saveFig:
@@ -394,7 +401,7 @@ class ExperimentUtils(object):
 
 	def plot_taskCost(self, saveFig=False):
 
-		filename = "metrics_obj.csv"
+		filename = "metrics_obj2.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 	
@@ -928,7 +935,7 @@ if __name__ == '__main__':
 
 	#filename1 = "force12A1.csv"
 	#filename2 = "force12B1.csv"
-	#experi.plot_forceOverTime(filename2, method="B", saveFig=True)
+	#experi.plot_forceOverTime(filename1, method="A", saveFig=True)
 	
 	experi.plot_taskEffort(saveFig=True)
 	#experi.plot_taskEffortTime(saveFig=True)	
