@@ -390,25 +390,25 @@ class PIDVelJaco(object):
 			# get next target position from position along trajectory
 			self.target_pos = self.planner.interpolate(t)
 
-		# check if the arm reached the goal, and restart path
-		if not self.reached_goal:
+			# check if the arm reached the goal, and restart path
+			if not self.reached_goal:
 			
-			dist_from_goal = -((curr_pos - self.goal_pos + math.pi)%(2*math.pi) - math.pi)			
-			dist_from_goal = np.fabs(dist_from_goal)
+				dist_from_goal = -((curr_pos - self.goal_pos + math.pi)%(2*math.pi) - math.pi)			
+				dist_from_goal = np.fabs(dist_from_goal)
 
-			# check if every joint is close enough to goal configuration
-			close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]
+				# check if every joint is close enough to goal configuration
+				close_to_goal = [dist_from_goal[i] < epsilon for i in range(7)]
 			
-			# if all joints are close enough, robot is at goal
-			is_at_goal = all(close_to_goal)
+				# if all joints are close enough, robot is at goal
+				is_at_goal = all(close_to_goal)
 			
-			if is_at_goal:
-				self.reached_goal = True
-		else:
-			print "REACHED GOAL! Holding position at goal."
-			self.target_pos = self.goal_pos
-			# TODO: this should only set it once!
-			self.expUtil.set_endT(time.time())
+				if is_at_goal:
+					self.reached_goal = True
+			else:
+				print "REACHED GOAL! Holding position at goal."
+				self.target_pos = self.goal_pos
+				# TODO: this should only set it once!
+				self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
 	if len(sys.argv) < 6:

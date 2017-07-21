@@ -366,7 +366,8 @@ class Planner(object):
 		request = {
 			"basic_info": {
 				"n_steps": self.num_waypts_plan,
-				"manip" : "j2s7s300"
+				"manip" : "j2s7s300",
+				"max_iter" : 40
 			},
 			"costs": [
 			{
