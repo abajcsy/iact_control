@@ -11,7 +11,7 @@
 	<!-- Task # (0-3) -->
 	<arg name="task" default="0"/>
 
-	<!-- Method # (A/B)) -->
+	<!-- Method # (A/B/C)) -->
 	<arg name="method" default="A"/>
 
 	<!-- velocity-based with trajopt planning PID -->

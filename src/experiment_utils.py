@@ -162,7 +162,7 @@ class ExperimentUtils(object):
 				# time: y+0.8
 				# cost: y+6, x-0.12
 				# effort: y+60
-				ax.text(x,y+60,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
+				ax.text(x,y+0.60,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
 
 		#ptime = []
 		#peffort = []
@@ -202,9 +202,9 @@ class ExperimentUtils(object):
 		ax.yaxis.set_ticks_position('none') 		
 
 
-		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Impedance}', r'\textbf{Learning}'), fontsize=18)
+		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Grav Comp}', r'\textbf{Impedance}'), fontsize=18)
 		if avgOpt is not None:		
-			leg = ax.legend((rectsA[0], rectsB[0], rectsOpt[0]), (r'\textbf{Impedance}', r'\textbf{Learning}', r'\textbf{Desired}'), fontsize=18)
+			leg = ax.legend((rectsA[0], rectsB[0], rectsOpt[0]), (r'\textbf{Grav Comp}', r'\textbf{Impedance}', r'\textbf{Desired}'), fontsize=18)
 
 		leg.get_frame().set_linewidth(0.0)
 		plt.show()
@@ -299,7 +299,7 @@ class ExperimentUtils(object):
 			print "Saved effort figure." 
 
 
-	def plot_taskEffort(self, saveFig=False):
+	def plot_taskEffort(self, filename, saveFig=False):
 		"""
 		Takes all participant data files and produces bar chart
 		comparing average force exerted by each participant for each task
@@ -307,14 +307,15 @@ class ExperimentUtils(object):
 		saveFig 	if True, saves final plot
 		"""
 		#filename = "metrics_obj.csv"
-		filename = "new_metrics_obj.csv"
+		#filename = "test_metrics_obj.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
-		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		numPpl = 2
+		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -338,26 +339,26 @@ class ExperimentUtils(object):
 		xlabel = "Task"
 		ylabel = "Total Effort (Nm)"
 		title = "Average Total Human Effort"	
-		maxY = 1000	
+		maxY = 100	
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
 
 		if saveFig:
 			here = os.path.dirname(os.path.realpath(__file__))
 			subdir = "/data/experimental/"
 			datapath = here + subdir
-			fig.savefig(datapath+"taskEffort2.pdf", bbox_inches="tight")
+			fig.savefig(datapath+"taskEffort.pdf", bbox_inches="tight")
 			print "Saved effort figure." 
 
-	def plot_taskEffortTime(self, saveFig=False):
+	def plot_taskEffortTime(self, filename, saveFig=False):
 
-		filename = "metrics_obj.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
-		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		numPpl = 2
+		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -381,7 +382,7 @@ class ExperimentUtils(object):
 		xlabel = "Task"
 		ylabel = "Interact Time (s)"
 		title = "Average Total Interaction Time"	
-		maxY = 16.0
+		maxY = 3.0
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
 
 		if saveFig:
@@ -392,9 +393,8 @@ class ExperimentUtils(object):
 			print "Saved time figure."
 
 
-	def plot_taskCost(self, saveFig=False):
+	def plot_taskCost(self, filename, saveFig=False):
 
-		filename = "metrics_obj.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 	
@@ -403,8 +403,9 @@ class ExperimentUtils(object):
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		pplA = [[0.0]*10, [0.0]*10, [0.0]*10]
-		pplB = [[0.0]*10, [0.0]*10, [0.0]*10]
+		numPpl = 2
+		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -930,8 +931,9 @@ if __name__ == '__main__':
 	#filename2 = "force12B1.csv"
 	#experi.plot_forceOverTime(filename2, method="B", saveFig=True)
 	
-	experi.plot_taskEffort(saveFig=True)
-	#experi.plot_taskEffortTime(saveFig=True)	
+	filename = "test_metrics_obj.csv"
+	experi.plot_taskEffort(filename, saveFig=True)
+	#experi.plot_taskEffortTime(filename, saveFig=True)	
 	#experi.plot_taskCost(saveFig=True)
 	#dataType = "tracked"	
 	#filename = "tracked53B1.csv"

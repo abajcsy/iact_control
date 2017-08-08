@@ -21,25 +21,25 @@ import logging
 import pid
 import copy
 
-import grav_comp
-from grav_comp import *
 
+HUMAN_TASK = 0
+COFFEE_TASK = 1
+TABLE_TASK = 2
+LAPTOP_TASK = 3
 
-MAX_ITER = 40		#2 or 40
-
-LAPTOP_1_xyz = [-1.3858/2.0 - 0.1, -0.3, 0.0]
-LAPTOP_1_xy = np.array(LAPTOP_1_xyz[0:2])
-LAPTOP_2_xyz = [-1.3858/2.0 + 0.35, 0.3, 0.0]
-LAPTOP_2_xy = np.array(LAPTOP_2_xyz[0:2])
-HUMAN_xyz = [-1.3858/2.0 - 0.1, -0.5, 0.0]
+MAX_ITER = 2
+LAPTOP_xyz = [-1.3858/2.0 - 0.1, -0.1, 0.0]
+LAPTOP_xy = np.array(LAPTOP_xyz[0:2])
+HUMAN_xyz = [0.0, 0.2, 0.0]
 HUMAN_xy = np.array(HUMAN_xyz[0:2])
-
 
 
 class Planner(object):
 
 
-	def __init__(self):
+	def __init__(self, task):
+
+		self.task = task
 
 		# ---- DEFORMATION Initialization ---- #
 
@@ -59,7 +59,7 @@ class Planner(object):
 		# ---- important internal variables ---- #
 
 		#these variables are fixed
-		self.num_waypts_plan = 6
+		self.num_waypts_plan = 4
 
 		#these variables change at each call
 		self.weights = None
@@ -81,8 +81,7 @@ class Planner(object):
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
 		plotCabinet(self.env)
-		#plotSphere(self.env,self.bodies,LAPTOP_1_xyz,0.3)
-		#plotSphere(self.env,self.bodies,LAPTOP_2_xyz,0.3)
+		#plotSphere(self.env,self.bodies,LAPTOP_xyz,0.4)
 		#plotSphere(self.env,self.bodies,HUMAN_xyz,0.4)
 
 
@@ -105,22 +104,20 @@ class Planner(object):
 		return feature*self.weights
 
 
-	# -- Face the Human -- #
+	# -- Keep Coffee Upright -- #
 
-	def mirror_features(self, waypt):
+	def coffee_features(self, waypt):
 
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
 			waypt[2] += math.pi
 		self.robot.SetDOFValues(waypt)
 		EE_link = self.robot.GetLinks()[7]
-		direction_y = sum(abs(EE_link.GetTransform()[1:3,0:3].dot([0.0,1.0,0.0])))
-		direction_z = sum(abs(EE_link.GetTransform()[0:2,0:3].dot([1.0,0.0,0.0])))
-		return direction_y + direction_z
+		return sum(abs(EE_link.GetTransform()[:2,:3].dot([1,0,0])))
 
-	def mirror_cost(self, waypt):
+	def coffee_cost(self, waypt):
 
-		feature = self.mirror_features(waypt)
+		feature = self.coffee_features(waypt)
 		return feature*self.weights
 
 
@@ -143,9 +140,7 @@ class Planner(object):
 		self.robot.SetDOFValues(waypt)
 		EE_link = self.robot.GetLinks()[10]
 		EE_coord_xy = EE_link.GetTransform()[0:2,3]
-		dist_1 = np.linalg.norm(EE_coord_xy - LAPTOP_1_xy) - 0.3
-		dist_2 = np.linalg.norm(EE_coord_xy - LAPTOP_2_xy) - 0.3
-		dist = min([dist_1, dist_2])
+		dist = np.linalg.norm(EE_coord_xy - LAPTOP_xy) - 0.4
 		if dist > 0:
 			return 0
 		return -dist
@@ -190,6 +185,7 @@ class Planner(object):
 		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
 
+
 	# ---- Table Constraint --- #
 
 	def table_constraint(self, waypt):
@@ -231,7 +227,7 @@ class Planner(object):
 			else:
 				init_waypts[count,:] = self.interpolate(curr_time).reshape((1,7))
 
-		
+
 		request = {
 			"basic_info": {
 				"n_steps": self.num_waypts_plan,
@@ -248,18 +244,11 @@ class Planner(object):
 			{
 				"type": "joint",
 				"params": {"vals": goal.tolist()}
-#				"type" : "pose", 
-#				"params" : {"xyz" : [-0.41992156, 0.52793478, 0.57166576], 
-#							"wxyz" : [1,0,0,0],
-#							"link": "j2s7s300_link_7",
-#							"rot_coeffs" : [0,0,0],
-#							"pos_coeffs" : [10,10,10]
-#							}	 
 			}			  
 			],
 			"init_info": {
-                "type": "given_traj",
-                "data": init_waypts.tolist()
+	            "type": "given_traj",
+	            "data": init_waypts.tolist()
 			}
 		}
 
@@ -267,10 +256,14 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		for t in range(1,self.num_waypts_plan):
-			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
-			#prob.AddCost(self.mirror_cost, [(t,j) for j in range(7)], "mirror%i"%t)
-			#prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
-			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
+			if self.task == TABLE_TASK:
+				prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
+			elif self.task == COFFEE_TASK:
+				prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
+			elif self.task == LAPTOP_TASK:
+				prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+			elif self.task == HUMAN_TASK:
+				prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 	
 		for t in range(1,self.num_waypts_plan - 1):
 			prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "up%i"%t)
@@ -286,14 +279,32 @@ class Planner(object):
 
 		Phi_p = 0.0
 		Phi = 0.0
-		for count in range(1,waypts_deform.shape[0]):
-			Phi_p += self.table_features(waypts_deform[count,:])
-			Phi += self.table_features(waypts_prev[count,:])
-			#Phi_p += self.laptop_features(waypts_deform[count,:], waypts_deform[count-1,:])
-			#Phi += self.laptop_features(waypts_prev[count,:], waypts_prev[count-1,:])
+		if self.task == TABLE_TASK:
+			for count in range(1,waypts_deform.shape[0]):
+				Phi_p += self.table_features(waypts_deform[count,:])
+				Phi += self.table_features(waypts_prev[count,:])
+			self.weights += -0.1*(Phi_p - Phi)
+			return self.weights
+		elif self.task == COFFEE_TASK:
+			for count in range(1,waypts_deform.shape[0]):
+				Phi_p += self.coffee_features(waypts_deform[count,:])
+				Phi += self.coffee_features(waypts_prev[count,:])
+			self.weights += -0.1*(Phi_p - Phi)
+			return self.weights
+		elif self.task == LAPTOP_TASK:
+			for count in range(1,waypts_deform.shape[0]):
+				Phi_p += self.laptop_features(waypts_deform[count,:], waypts_deform[count-1,:])
+				Phi += self.laptop_features(waypts_prev[count,:], waypts_prev[count-1,:])
+			self.weights += -1.0*(Phi_p - Phi)
+			return self.weights
+		elif self.task == HUMAN_TASK:
+			for count in range(1,waypts_deform.shape[0]):
+				Phi_p += self.human_features(waypts_deform[count,:], waypts_deform[count-1,:])
+				Phi += self.human_features(waypts_prev[count,:], waypts_prev[count-1,:])
+			self.weights += -1.0*(Phi_p - Phi)
+			return self.weights
 
-		self.weights += -1.0*(Phi_p - Phi)
-		return self.weights
+
 
 
 	# ---- deform the desired trajectory ---- #	
@@ -319,6 +330,8 @@ class Planner(object):
 
 	def replan(self, start, goal, start_time, final_time, weights):
 
+		if weights == None:
+			return
 		self.weights = weights
 		self.trajOpt(start, goal, start_time, final_time)
 		self.start_time = start_time
@@ -380,4 +393,55 @@ class Planner(object):
 if __name__ == '__main__':
 
 	time.sleep(50)
+
+
+"""
+# -- Face the Human -- #
+
+	def mirror_features(self, waypt):
+
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		EE_link = self.robot.GetLinks()[7]
+		direction_y = sum(abs(EE_link.GetTransform()[1:3,0:3].dot([0.0,1.0,0.0])))
+		direction_z = sum(abs(EE_link.GetTransform()[0:2,0:3].dot([1.0,0.0,0.0])))
+		return direction_y + direction_z
+
+	def mirror_cost(self, waypt):
+
+		feature = self.mirror_features(waypt)
+		return feature*self.weights
+
+if self.task == MIRROR_TASK:
+			request = {
+				"basic_info": {
+					"n_steps": self.num_waypts_plan,
+					"manip" : "j2s7s300",
+					"max_iter": MAX_ITER
+				},
+				"costs": [
+				{
+					"type": "joint_vel",
+					"params": {"coeffs": [1.0]}
+				}
+				],
+				"constraints": [
+				{
+					"type" : "pose", 
+					"params" : {"xyz" : [-0.41992156, 0.52793478, 0.57166576], 
+							"wxyz" : [1,0,0,0],
+							"link": "j2s7s300_link_7",
+							"rot_coeffs" : [0,0,0],
+							"pos_coeffs" : [10,10,10]
+							}
+				}			  
+				],
+				"init_info": {
+		            "type": "given_traj",
+		            "data": init_waypts.tolist()
+				}
+			}
+"""
 

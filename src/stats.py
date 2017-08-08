@@ -299,6 +299,7 @@ def compute_obj_metrics():
 						obj_metrics[ID][task][trial][method][7] = iactT
 
 
+	"""
 	for ID in trackedData.keys():
 		for task in trackedData[ID]:
 			if task != 0:
@@ -318,6 +319,7 @@ def compute_obj_metrics():
 						obj_metrics[ID][task][trial][method][4] = Rvel_opt - Rvel
 						obj_metrics[ID][task][trial][method][5] = Rfeat_opt - Rfeat
 				plan.kill_planner()
+	"""
 	return obj_metrics
 
 def compute_subj_metrics():
@@ -371,8 +373,10 @@ def	reorganize_data(filename):
 	objective measures and subjective measures.
 	"""
 	obj_metrics = compute_obj_metrics()
+	"""	
 	subj_metrics = compute_subj_metrics()
-	
+	"""	
+
 	# write to file
 	here = os.path.dirname(os.path.realpath(__file__))
 	subdir = "/data/experimental/"
@@ -399,6 +403,7 @@ def	reorganize_data(filename):
 	out_obj.close()
 
 	# write subjective metrics
+	"""
 	with open(filepath_subj, 'w') as out_subj:
 		header = "participant,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10\n"
 		out_subj.write(header)
@@ -410,6 +415,7 @@ def	reorganize_data(filename):
 					out_subj.write(","+str(num))
 		out_subj.write('\n')
 	out_subj.close()
+	"""
 
 def test():
 	filename = "tracked111A1.csv"
@@ -438,7 +444,8 @@ def test():
 
 
 if __name__ == '__main__':
-	filename = "new_metrics"
+	
+	filename = "test_metrics"
 	reorganize_data(filename)
 
 	#experi = ExperimentUtils()
