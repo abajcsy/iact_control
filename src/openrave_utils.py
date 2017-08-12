@@ -121,11 +121,11 @@ def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
 		bodies.append(body)
 
 
-def plotTraj(env,robot,bodies,waypts, color=[0, 1, 0]):
+def plotTraj(env,robot,bodies,waypts, size=0.1, color=[0, 1, 0]):
 	"""
 	Plots the best trajectory found or planned
 	"""
-	for i in range(0,len(waypts),3):
+	for i in range(0,len(waypts),1):
 		waypoint = waypts[i]
 		dof = np.append(waypoint, np.array([1, 1, 1]))
 		dof[2] += math.pi
@@ -133,7 +133,7 @@ def plotTraj(env,robot,bodies,waypts, color=[0, 1, 0]):
 		coord = robotToCartesian(robot)
 		# sz=0.015
 		# 0.009
-		plotPoint(env, bodies, coord[6], 0.015, color)
+		plotPoint(env, bodies, coord[6], size, color)
 
 def plotPoint(env, bodies, coords, size=0.1, color=[0, 1, 0]):
 	"""

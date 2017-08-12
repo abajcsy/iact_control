@@ -24,10 +24,10 @@ from trajopt_planner import *
 
 from scipy import stats
 
-pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
+pick_table = [104.2,151.6,183.8,101.8,224.2,216.9,310.8]
 pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
 place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
-place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
+place_higher = [233.0,132.4,200.5,137.8,248.7,243.2,264.8]
 
 COFFEE_TASK = 1
 TABLE_TASK = 2
@@ -164,16 +164,13 @@ def compute_optimalReward(task):
 	elif task == LAPTOP_TASK:
 		weights = 10
 
-	# initialize start/goal based on task 
+	# initialize start/goal based on task
 	if task == COFFEE_TASK or task == HUMAN_TASK:
 		pick = pick_shelf
-	else:
-		pick = pick_basic
-
-	if task == LAPTOP_TASK:
-		place = place_higher
-	else:
 		place = place_lower
+	else:
+		pick = pick_table
+		place = place_higher
 		
 	startRad = np.array(pick)*(math.pi/180.0)
 	goalRad = np.array(place)*(math.pi/180.0)
