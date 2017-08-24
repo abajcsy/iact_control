@@ -33,80 +33,6 @@ COFFEE_TASK = 1
 TABLE_TASK = 2
 LAPTOP_TASK = 3
 
-def t_test(dataType):
-	"""
-	Performs a t-test for the means of two independant samples of experimental
-	data. This is a two-sided test for the null hypothesis that 2 independent 
-	samples have identical average (expected) values. This test assumes
-	that the populations have identical variances.
-	"""
-
-	# read the data
-	parser = ExperimentUtils()
-	data = parser.parse_data(dataType)
-
-	N = len(data.keys()) # number participants
-
-	# - for trial 1 and trial 2:
-	# 	L2 norm over each timestep, then sum all the values together
-	# - average over two trials for each participant 
-	task_avgs = {}
-
-	# participant ID can take values 0 - 9
-	for ID in data.keys():
-		for task in data[ID]:
-			# dont include the familiarization task (task can take values 1,2,3)
-			if task != 0:
-				if task not in task_avgs:
-					task_avgs[task] = {}
-					task_avgs[task]["A"] = np.array([0.0]*N)
-					task_avgs[task]["B"] = np.array([0.0]*N)
-
-				trialAsum = [0.0,0.0]
-				trialBsum = [0.0,0.0]
-				# trial can take values 1 or 2
-				for trial in data[ID][task]:
-					# only compute metrics over data, not timestamps
-					Adata = data[ID][task][trial]['A'][1:8]
-					Bdata = data[ID][task][trial]['B'][1:8]
-			
-					#print str(ID)+str(task)+str(trial)+"A"
-					#print "Adata: " + str(Adata)
-					#print str(ID)+str(task)+str(trial)+"B"
-					#print "Bdata: " + str(Bdata)
-
-					(h, w) = np.shape(Adata)
-					for i in range(w):
-						trialAsum[trial-1] += np.linalg.norm(Adata[:,i])
-					(h, w) = np.shape(Bdata)
-					for i in range(w):
-						trialBsum[trial-1] += np.linalg.norm(Bdata[:,i])
-				avg_methodA = (trialAsum[0]+trialAsum[1])/2.0
-				avg_methodB = (trialBsum[0]+trialBsum[1])/2.0
-
-				task_avgs[task]["A"][ID] = avg_methodA
-				task_avgs[task]["B"][ID] = avg_methodB
-
-	# comput independent two-sample t-test 
-	# NOTE: we can assume that the two sample sizes are the same, and 
-	#		that the two distributions have the same variance
-	for task in range(1,4):
-		taskA = task_avgs[task]["A"]
-		taskB = task_avgs[task]["B"]
-
-		meanA = np.mean(taskA)
-		meanB = np.mean(taskB)
-		print "meanA: " + str(meanA)
-		print "meanB: " + str(meanB)
-		diff = meanA - meanB
-		print "diff: " + str(diff)
-
-		(statistic, pvalue) = stats.ttest_ind(a=taskA, b=taskB, equal_var=True)
-
-		print "\n"
-		print "task"+str(task)+" statistic: " + str(statistic)
-		print "task"+str(task)+" pvalue: " + str(pvalue)
-
 def compute_effort(data):
 	"""
 	Given one participant's force measurements for one trial of one experiment
@@ -152,48 +78,59 @@ def compute_reward(data, planner):
 	print "Rfeat:" + str(Rfeat)
 	return (Rvel, Rfeat)
 
-def compute_optimalReward(task):
+def compute_optimalReward(task, precomputed=True):
 	"""
 	Compute the optimal feature values for given task.
+	Precomputed=True means it uses old values, set to False if want to recompute.
 	"""
 
-	T = 15.0
-	weights = 0
-	if task == TABLE_TASK or task == COFFEE_TASK:
-		weights = 1
-	elif task == LAPTOP_TASK:
-		weights = 10
-
-	# initialize start/goal based on task
-	if task == COFFEE_TASK or task == HUMAN_TASK:
-		pick = pick_shelf
-		place = place_lower
+	if precomputed:
+		if task == 1: 
+			return (0.10292734749900004, 37.699161124896193)
+		elif task == 2:
+			return (0.029572791376999984, 37.420166769225823)
+		elif task == 3:
+			return (0.040048660123999998, 10.354323653427837)
 	else:
-		pick = pick_table
-		place = place_higher
-		
-	startRad = np.array(pick)*(math.pi/180.0)
-	goalRad = np.array(place)*(math.pi/180.0)
-	start = startRad
-	goal = goalRad
+		T = 15.0
+		weights = 0
+		if task == TABLE_TASK or task == COFFEE_TASK:
+			weights = 1
+		elif task == LAPTOP_TASK:
+			weights = 10
 
-	plan = Planner(task)	
-	filename = None
-	if task == 1:
-		filename = "task1.csv"
-	elif task == 2:
-		filename = "task2.csv"
-	elif task == 3:
-		filename = "task3.csv"
+		# initialize start/goal based on task
+		if task == COFFEE_TASK or task == HUMAN_TASK:
+			pick = pick_shelf
+			place = place_lower
+		else:
+			pick = pick_table
+			place = place_higher
 		
-	# get optimal waypts from file
-	waypts = get_opt_waypts(filename)
-	r = plan.featurize(waypts)
-	Rvel = r[0]
-	Rfeat = np.sum(r[1])
+		startRad = np.array(pick)*(math.pi/180.0)
+		goalRad = np.array(place)*(math.pi/180.0)
+		start = startRad
+		goal = goalRad
+	
+		filename = None
+		if task == 1:
+			filename = "task1.csv"
+		elif task == 2:
+			filename = "task2.csv"
+		elif task == 3:
+			filename = "task3.csv"
+		
+		# get optimal waypts from file
+		waypts = get_opt_waypts(filename)
 
-	plan.kill_planner()
-	return (Rvel, Rfeat)
+		print "computing optimal reward"
+		plan = Planner(task, demo=False)
+		r = plan.featurize(waypts)
+		Rvel = r[0]
+		Rfeat = np.sum(r[1])
+		print Rvel, Rfeat
+		plan.kill_planner()
+		return (Rvel, Rfeat)
 
 def get_opt_waypts(filename):
 	"""
@@ -225,7 +162,7 @@ def get_opt_plan(task):
 	"""
 	Computes the optimal plan given a task
 	"""
-
+	print "in get opt plan"
 	T = 15.0
 	weights = 0
 	if task == TABLE_TASK or task == COFFEE_TASK:
@@ -249,9 +186,9 @@ def get_opt_plan(task):
 	start = startRad
 	goal = goalRad
 
-	plan = Planner(task)	
+	plan = Planner(task, demo=False)	
 	plan.replan(start, goal, weights, 0.0, T, 0.1)
-
+	print "in get opt plan"
 	plan.kill_planner()
 	return plan
 
@@ -295,14 +232,15 @@ def compute_obj_metrics():
 						obj_metrics[ID][task][trial][method][6] = effort
 						obj_metrics[ID][task][trial][method][7] = iactT
 
+	# 	NOTE: You have to turn off QtCoin viewer in openrave_utils initialize() function
+	# 	for you to be able to call Planner through openrave multiple times in a row
 
-	"""
 	for ID in trackedData.keys():
 		for task in trackedData[ID]:
 			if task != 0:
 				# compute optimal reward
-				(Rvel_opt, Rfeat_opt) = compute_optimalReward(task)
-				plan = Planner(task)	
+				(Rvel_opt, Rfeat_opt) = compute_optimalReward(task, precomputed=True)
+				plan = Planner(task, demo=False)	
 				for trial in trackedData[ID][task]:
 					for method in trackedData[ID][task][trial]:
 
@@ -316,7 +254,6 @@ def compute_obj_metrics():
 						obj_metrics[ID][task][trial][method][4] = Rvel_opt - Rvel
 						obj_metrics[ID][task][trial][method][5] = Rfeat_opt - Rfeat
 				plan.kill_planner()
-	"""
 	return obj_metrics
 
 def compute_subj_metrics():
@@ -328,13 +265,20 @@ def compute_subj_metrics():
 
 	# set up data structure
 	subj_metrics = {}
-	for ID in range(10):
+
+	"""
+	TODO: the ID range shold change depending 
+		  on numbering scheme for experiment
+	"""
+	IDNums = [i for i in range(2,8)]
+
+	for ID in IDNums:
 		for method in ["A","B"]:
 			# sanity checks
 			if ID not in subj_metrics:
 				subj_metrics[ID] = {}
 			if method not in subj_metrics[ID]:
-				subj_metrics[ID][method] = [None]*12
+				subj_metrics[ID][method] = [None]*15
 
 	here = os.path.dirname(os.path.realpath(__file__))
 	subdir = "/data/experimental/"
@@ -349,18 +293,18 @@ def compute_subj_metrics():
 				continue
 			values = line.split(',')
 			info = values[1:len(values)]
-			ID = int(info[9])
-			method = info[10]
-			age = info[11]
-			gender = info[12]
+			print info
+			ID = int(info[0])
+			method = info[1]
+			age = info[2]
+			gender = info[3]
+			tech_bg = info[4]
 			# store age
 			subj_metrics[ID][method][0] = age
 			subj_metrics[ID][method][1] = gender
-			# parse likert data
-			for i in range(8):
-				subj_metrics[ID][method][i+2] = info[i]
-			subj_metrics[ID][method][10] = info[14]
-			subj_metrics[ID][method][11] = info[15]
+			# parse likert data (13 Q's in total)
+			for i in range(5,18):
+				subj_metrics[ID][method][i-3] = info[i]
 
 	return subj_metrics
 
@@ -370,9 +314,8 @@ def	reorganize_data(filename):
 	objective measures and subjective measures.
 	"""
 	obj_metrics = compute_obj_metrics()
-	"""	
 	subj_metrics = compute_subj_metrics()
-	"""	
+		
 
 	# write to file
 	here = os.path.dirname(os.path.realpath(__file__))
@@ -400,9 +343,9 @@ def	reorganize_data(filename):
 	out_obj.close()
 
 	# write subjective metrics
-	"""
+	
 	with open(filepath_subj, 'w') as out_subj:
-		header = "participant,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10\n"
+		header = "participant,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10,Q11,Q12,Q13\n"
 		out_subj.write(header)
 		for ID in subj_metrics.keys():
 			for method in subj_metrics[ID]:
@@ -410,9 +353,9 @@ def	reorganize_data(filename):
 				out_subj.write(row)
 				for num in subj_metrics[ID][method]:
 					out_subj.write(","+str(num))
-		out_subj.write('\n')
+				out_subj.write('\n')
+			#out_subj.write('\n')
 	out_subj.close()
-	"""
 
 def test():
 	filename = "tracked111A1.csv"
@@ -435,15 +378,15 @@ def test():
 			i += 1
 		data = np.array(methodData)
 		print data
-		plan = Planner(1)
+		plan = Planner(1, demo=False)
 		res = compute_reward(data, plan)
 		print res
 
 
 if __name__ == '__main__':
 	
-	filename = "test_metrics"
-	reorganize_data(filename)
+	filename = "pilot_metrics"
+	#reorganize_data(filename)
 
 	#experi = ExperimentUtils()
 	#ID = 9
@@ -453,5 +396,5 @@ if __name__ == '__main__':
 	#plan = get_opt_waypts(task)
 	#experi.plot_trajDebug(plan)
 
-	#print compute_optimalReward(2)
+	#print "task 1 opt: " + str(compute_optimalReward(1), precomputed=False)
 	

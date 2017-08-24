@@ -20,6 +20,10 @@ from openrave_utils import *
 import stats
 from stats import *
 
+NUM_PPL = 6
+# if numbering of participants doesn't start at 0 (ex. starts at 2) then set the offset here for proper indexing
+PPL_OFFSET = 2
+
 class ExperimentUtils(object):
 	
 	def __init__(self):
@@ -101,7 +105,16 @@ class ExperimentUtils(object):
 
 	# ---- Plotting Functionality ---- #
 
-	def plotting(self, avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
+	def plotting(self, avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None, plotType="effort"):
+		"""
+		Basic plotting functionality
+		----
+		avgOpt		plots optimal in addition to experimental
+		plotType 		"effort" or "time" or "cost"
+			- effort		sets up graphing for task effort comparison
+			- time			sets up graphing for task time comparison
+			- cost 			sets up graphing for task cost comparison	
+		"""
 		ind = np.arange(3)  # the x locations for the groups
 		width = 0.45       # the width of the bars
 		offset = 0.15
@@ -137,37 +150,48 @@ class ExperimentUtils(object):
 				ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,'%.2f' % 
 						height,ha='center', va='bottom', fontsize=15)
 
-		def autolabel_star(rects, std,p):
+		def autolabel_star(rects,std,p,plotType):
 			"""
 			Attach a text label above each bar displaying its height
 			"""
+
 			for i in range(len(rects)):
 				height = rects[i].get_height()
-				# cost:
-				#x = rects[i].get_x() + rects[i].get_width()*1.5
-				#y = std[i]+height+10
 
-				# time:
-				#x = rects[i].get_x() + rects[i].get_width()
-				#y = std[i]+height+1
+				# set up autolabel based on type=effort,time,cost
+				if plotType is "effort":
+					x = rects[i].get_x() + rects[i].get_width()
+					y = std[i]+height+50
+					xoffset = 0.0
+					yoffset = 10.0
+					astyle = '-[, widthB=2.5, lengthB=1.2'
+					ax_xoffset = 0
+					ax_yoffset = 60
+				elif plotType is "time":
+					x = rects[i].get_x() + rects[i].get_width()
+					y = std[i]+height+1
+					xoffset = 0.0
+					yoffset = 0.1
+					astyle = '-[, widthB=2.5, lengthB=1.2'
+					ax_xoffset = 0
+					ax_yoffset = 0.8
+				elif plotType is "cost":
+					x = rects[i].get_x() + rects[i].get_width()*1.5
+					y = std[i]+height+10
+					xoffset = -0.12
+					yoffset = 0.8
+					astyle = '-[, widthB=1.8, lengthB=1.2'
+					ax_xoffset = -0.12
+					ax_yoffset = 6
 
-				# effort:
-				x = rects[i].get_x() + rects[i].get_width()
-				y = std[i]+height+50
-				print (x,y)
-				# time: x, y+0.1, widthB=2.5
-				# cost: x-0.12, y+0.8, widthB=1.8
-				# effort: x, y+10, widthB=2.5
-				ax.annotate(r'\textbf{*}', xy=(x,y), xytext=(x,y+10), xycoords='data', fontsize=18, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, widthB=2.5, lengthB=1.2', lw=1.5))
-				# time: y+0.8
-				# cost: y+6, x-0.12
-				# effort: y+60
-				ax.text(x,y+0.60,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
+				ax.annotate(r'\textbf{*}', xy=(x,y), xytext=(x+xoffset,y+yoffset), xycoords='data', fontsize=18, ha='center', va='bottom',arrowprops=dict(arrowstyle=astyle, lw=1.5))
+
+				ax.text(x+ax_xoffset,y+ax_yoffset,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
 
 		#ptime = []
 		#peffort = []
-		pcost = [0.001,0.001,0.001]
-		autolabel_star(rectsA,stdA,pcost)
+		#pcost = [0.001,0.001,0.001]
+		#autolabel_star(rectsA,stdA,pcost,plotType)
 		#autolabel(rectsB)
 
 		# add some text for labels, title and axes ticks
@@ -299,23 +323,21 @@ class ExperimentUtils(object):
 			print "Saved effort figure." 
 
 
-	def plot_taskEffort(self, filename, saveFig=False):
+	def plot_taskEffort(self, filename, saveFig=False, saveName="taskEffort"):
 		"""
 		Takes all participant data files and produces bar chart
 		comparing average force exerted by each participant for each task
 		----
 		saveFig 	if True, saves final plot
+		saveName	name of saved output file (will be saved as .pdf)
 		"""
-		#filename = "metrics_obj.csv"
-		#filename = "test_metrics_obj.csv"
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		numPpl = 2
-		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
-		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplA = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
+		pplB = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -328,37 +350,36 @@ class ExperimentUtils(object):
 				sumA[task-1] += trialAvgA
 				sumB[task-1] += trialAvgB
 	
-				pplA[task-1][ID] = trialAvgA
-				pplB[task-1][ID] = trialAvgB
-		avgA = [a/10.0 for a in sumA]
+				pplA[task-1][ID-PPL_OFFSET] = trialAvgA
+				pplB[task-1][ID-PPL_OFFSET] = trialAvgB
+		avgA = [a/NUM_PPL for a in sumA]
 		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
-		avgB = [b/10.0 for b in sumB]
+		avgB = [b/NUM_PPL for b in sumB]
 		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
 
 		# plot data
 		xlabel = "Task"
 		ylabel = "Total Effort (Nm)"
 		title = "Average Total Human Effort"	
-		maxY = 100	
+		maxY = 900	
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
 
 		if saveFig:
 			here = os.path.dirname(os.path.realpath(__file__))
 			subdir = "/data/experimental/"
 			datapath = here + subdir
-			fig.savefig(datapath+"taskEffort.pdf", bbox_inches="tight")
+			fig.savefig(datapath+saveName+".pdf", bbox_inches="tight")
 			print "Saved effort figure." 
 
-	def plot_taskEffortTime(self, filename, saveFig=False):
+	def plot_taskEffortTime(self, filename, saveFig=False, saveName="taskEffortTime"):
 
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		numPpl = 2
-		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
-		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplA = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
+		pplB = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -371,41 +392,39 @@ class ExperimentUtils(object):
 				sumA[task-1] += trialAvgA
 				sumB[task-1] += trialAvgB
 	
-				pplA[task-1][ID] = trialAvgA
-				pplB[task-1][ID] = trialAvgB
-		avgA = [a/10.0 for a in sumA]
+				pplA[task-1][ID-PPL_OFFSET] = trialAvgA
+				pplB[task-1][ID-PPL_OFFSET] = trialAvgB
+		avgA = [a/NUM_PPL for a in sumA]
 		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
-		avgB = [b/10.0 for b in sumB]
+		avgB = [b/NUM_PPL for b in sumB]
 		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
 
 		# plot data
 		xlabel = "Task"
 		ylabel = "Interact Time (s)"
 		title = "Average Total Interaction Time"	
-		maxY = 3.0
+		maxY = 20.0
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
 
 		if saveFig:
 			here = os.path.dirname(os.path.realpath(__file__))
 			subdir = "/data/experimental/"
 			datapath = here + subdir
-			fig.savefig(datapath+"taskTime.pdf", bbox_inches="tight")
+			fig.savefig(datapath+saveName+".pdf", bbox_inches="tight")
 			print "Saved time figure."
 
 
-	def plot_taskCost(self, filename, saveFig=False):
+	def plot_taskCost(self, filename, saveFig=False, saveName="taskCost"):
 
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 	
 		optimal = [0.0,0.0,0.0]
-
 		sumA = [0.0,0.0,0.0]
 		sumB = [0.0,0.0,0.0]
 
-		numPpl = 2
-		pplA = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
-		pplB = [[0.0]*numPpl, [0.0]*numPpl, [0.0]*numPpl]
+		pplA = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
+		pplB = [[0.0]*NUM_PPL, [0.0]*NUM_PPL, [0.0]*NUM_PPL]
 		for ID in metrics.keys():
 			for task in metrics[ID]:
 				trialAvgA = 0.0
@@ -421,24 +440,24 @@ class ExperimentUtils(object):
 				sumA[task-1] += trialAvgA
 				sumB[task-1] += trialAvgB
 	
-				pplA[task-1][ID] = trialAvgA
-				pplB[task-1][ID] = trialAvgB
-		avgA = [a/10.0 for a in sumA]
+				pplA[task-1][ID-PPL_OFFSET] = trialAvgA
+				pplB[task-1][ID-PPL_OFFSET] = trialAvgB
+		avgA = [a/NUM_PPL for a in sumA]
 		stdA = [np.std(pplA[0]), np.std(pplA[1]), np.std(pplA[2])]
-		avgB = [b/10.0 for b in sumB]
+		avgB = [b/NUM_PPL for b in sumB]
 		stdB = [np.std(pplB[0]), np.std(pplB[1]), np.std(pplB[2])]
 
 		xlabel = "Task"
 		ylabel = r"Cost Value"
 		title = r"Average Cost Across Tasks"	
-		maxY = 100.0
+		maxY = 80.0
 		fig = self.plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY,optimal)
 
 		if saveFig:
 			here = os.path.dirname(os.path.realpath(__file__))
 			subdir = "/data/experimental/"
 			datapath = here + subdir
-			fig.savefig(datapath+"taskCost.pdf", bbox_inches="tight")
+			fig.savefig(datapath+saveName+".pdf", bbox_inches="tight")
 			print "Saved cost figure."
 
 
@@ -919,6 +938,9 @@ class ExperimentUtils(object):
 		out.close()
 
 if __name__ == '__main__':
+	"""
+	NOTE: Make sure to change the number of participants at the top! and the offset!
+	"""
 
 	experi = ExperimentUtils()
 	#task = 2
@@ -931,10 +953,11 @@ if __name__ == '__main__':
 	#filename2 = "force12B1.csv"
 	#experi.plot_forceOverTime(filename2, method="B", saveFig=True)
 	
-	filename = "test_metrics_obj.csv"
-	experi.plot_taskEffort(filename, saveFig=True)
-	#experi.plot_taskEffortTime(filename, saveFig=True)	
-	#experi.plot_taskCost(saveFig=True)
+	filename = "pilot_metrics_obj_ALL.csv"
+	#experi.plot_taskEffort(filename, saveFig=True,saveName="taskEffort_ALL")
+	#experi.plot_taskEffortTime(filename, saveFig=True,saveName="taskEffortTime_ALL")	
+	experi.plot_taskCost(filename, saveFig=True,saveName="taskCost_ALL")
+
 	#dataType = "tracked"	
 	#filename = "tracked53B1.csv"
 	#experi.plot_traj(dataType, filename)

@@ -48,7 +48,7 @@ class Planner(object):
 		if self.demo:
 			self.MAX_ITER = 40
 		else:
-			self.MAX_ITER = 2
+			self.MAX_ITER = 40
 
 		self.start_time = None
 		self.final_time = None
@@ -65,7 +65,7 @@ class Planner(object):
 		self.step_time = None
 		self.waypts_time = None
 
-		self.weights = 1
+		self.weights = [0.0,0.0,0.0]
 		self.waypts_prev = None
 
 		# ---- OpenRAVE Initialization ---- #
@@ -118,18 +118,17 @@ class Planner(object):
 		---
 		input trajectory, output list of feature values
 		"""
-		features = [None,None]
+		features = [None,None,None,None]
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
+		features[2] = [0.0]*(len(waypts)-1)
+		features[3] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
-			if self.task == TABLE_TASK:
-				features[1][index] = self.table_features(waypts[index+1])
-			elif self.task == LAPTOP_TASK:
-				features[1][index] = self.laptop_features(waypts[index+1],waypts[index])
-			elif self.task == COFFEE_TASK:
-				features[1][index] = self.coffee_features(waypts[index+1])
-			elif self.task == HUMAN_TASK:
-				features[1][index] = self.human_features(waypts[index+1],waypts[index])
+			features[1][index] = self.coffee_features(waypts[index+1])
+			features[2][index] = self.table_features(waypts[index+1])
+			features[3][index] = self.laptop_features(waypts[index+1],waypts[index])
+			#elif self.task == HUMAN_TASK:
+			#	features[1][index] = self.human_features(waypts[index+1],waypts[index])
 		return features
 
 	# -- Velocity -- #
@@ -180,7 +179,7 @@ class Planner(object):
 		input trajectory, output scalar cost
 		"""
 		feature = self.table_features(waypt)
-		return feature*self.weights
+		return feature*self.weights[1]
 
 	# -- Coffee (or z-orientation of end-effector) -- #
 
@@ -205,7 +204,7 @@ class Planner(object):
 		input trajectory, output scalar cost
 		"""
 		feature = self.coffee_features(waypt)
-		return feature*self.weights
+		return feature*self.weights[0]
 
 	# -- Distance to Laptop -- #
 
@@ -251,7 +250,7 @@ class Planner(object):
 		prev_waypt = waypt[0:7]
 		curr_waypt = waypt[7:14]
 		feature = self.laptop_features(curr_waypt,prev_waypt)
-		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
+		return feature*self.weights[2]*np.linalg.norm(curr_waypt - prev_waypt)
 
 	# -- Distance to Human -- #
 
@@ -361,12 +360,12 @@ class Planner(object):
 		self.robot.SetDOFValues(aug_start)
 
 		self.num_waypts_plan = 4
-		if self.waypts_plan == None:
-			init_waypts = np.zeros((self.num_waypts_plan,7))
-			for count in range(self.num_waypts_plan):
-				init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
-		else:
-			init_waypts = self.waypts_plan 
+		#if self.waypts_plan == None:
+		init_waypts = np.zeros((self.num_waypts_plan,7))
+		for count in range(self.num_waypts_plan):
+			init_waypts[count,:] = start + count/(self.num_waypts_plan - 1.0)*(goal - start)
+		#else:
+		#	init_waypts = self.waypts_plan 
 		
 		request = {
 			"basic_info": {
@@ -395,15 +394,12 @@ class Planner(object):
 		s = json.dumps(request)
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
-		for t in range(1,self.num_waypts_plan): 
-			if self.task == TABLE_TASK:
-				prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
-			elif self.task == LAPTOP_TASK:
-				prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
-			elif self.task == COFFEE_TASK:
-				prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
-			elif self.task == HUMAN_TASK:
-				prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
+		for t in range(1,self.num_waypts_plan):
+			#prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
+			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
+			#prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+			#elif self.task == HUMAN_TASK:
+			#	prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
 
 		for t in range(1,self.num_waypts_plan - 1):
@@ -431,34 +427,36 @@ class Planner(object):
 		if waypts_deform != None:
 			new_features = self.featurize(waypts_deform)
 			old_features = self.featurize(waypts_prev)
-			Phi_p = np.array([new_features[0], sum(new_features[1])])
-			Phi = np.array([old_features[0], sum(old_features[1])])
+			Phi_p = np.array([new_features[0], sum(new_features[1]), sum(new_features[2]), sum(new_features[3])])
+			Phi = np.array([old_features[0], sum(old_features[1]), sum(old_features[2]), sum(old_features[3])])
 			
-			update_gain = 1.0
-			max_weight = 1.0
+			update_gain_coffee = 2.0
+			update_gain_table = 2.0
+			update_gain_laptop = 10.0
 
-			if self.task == TABLE_TASK:
-				update_gain = 0.5
-				max_weight = 1.0
-			elif self.task == LAPTOP_TASK:
-				update_gain = 20.0
-				max_weight = 10.0
-			elif self.task == COFFEE_TASK:
-				update_gain = 1.0
-				max_weight = 1.0
-			elif self.task == HUMAN_TASK:
-				update_gain = 20.0
-				max_weight = 10.0
+			max_weight_coffee = 1.0			
+			max_weight_table = 1.0
+			max_weight_laptop = 10.0
+
 
 			update = Phi_p - Phi
-			curr_weight = self.weights - update_gain*update[1]
-			if curr_weight > max_weight:
-				curr_weight = max_weight
-			elif curr_weight < 0.0:
-				curr_weight = 0.0
+			curr_weight = [self.weights[0] - update_gain_coffee*update[1], self.weights[1] - update_gain_table*update[2], self.weights[2] - update_gain_laptop*update[3]]
 
-			#print "here is the new weight:"
-			#print curr_weight
+			if curr_weight[0] > max_weight_coffee:
+				curr_weight[0] = max_weight_coffee
+			elif curr_weight[0] < -max_weight_coffee:
+				curr_weight[0] = -max_weight_coffee
+			if curr_weight[1] > max_weight_table:
+				curr_weight[1] = max_weight_table
+			elif curr_weight[1] < -max_weight_table:
+				curr_weight[1] = -max_weight_table
+			if curr_weight[2] > max_weight_laptop:
+				curr_weight[2] = max_weight_laptop
+			elif curr_weight[2] < -max_weight_laptop:
+				curr_weight[2] = -max_weight_laptop
+
+			print "here are the old weights:", self.weights
+			print "here is the new weight:", curr_weight
 
 			self.weights = curr_weight
 			return self.weights

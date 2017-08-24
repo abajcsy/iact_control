@@ -16,11 +16,15 @@ def initialize(model_filename='jaco', envXML=None):
 	'''
 	Load and configure the JACO robot. If envXML is not None, loads environment.
 	Returns robot and environment.
+	NOTE: 
+	IF YOU JUST WANT TO DO COMPUTATIONS THROUGH OPENRAVE
+	AND WANT MULTPILE INSTANCES TO OPEN, THEN HAVE TO TURN OFF
+	QTCOIN AND ALL VIEWER FUNCTIONALITY OR IT WILL CRASH. 
 	'''
 	env = openravepy.Environment()
 	if envXML is not None:
 		env.LoadURI(envXML)
-	env.SetViewer('qtcoin')
+	#env.SetViewer('qtcoin')
 
 	# Assumes the robot files are located in the data folder of the
 	# kinova_description package in the catkin workspace.
@@ -34,6 +38,7 @@ def initialize(model_filename='jaco', envXML=None):
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
 	robot.SetDOFValues(robot_starting_dofs)
 
+	"""
 	viewer = env.GetViewer()
 	viewer.SetSize(500,500)
 	cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
@@ -42,6 +47,7 @@ def initialize(model_filename='jaco', envXML=None):
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
 	viewer.SetCamera(cam_params)
 	#viewer.SetBkgndColor([0.8,0.8,0.8])
+	"""
 
 	return env, robot
 

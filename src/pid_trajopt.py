@@ -126,13 +126,13 @@ class PIDVelJaco(object):
 		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = 0
+		self.weights = [0.0, 0.0, 0.0]
 		# if in demo mode, then set the weights to be optimal
-		if self.demo:
-			if self.task == TABLE_TASK or self.task == COFFEE_TASK:
-				self.weights = 1
-			elif self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
-				self.weights = 10
+#		if self.demo:
+#			if self.task == TABLE_TASK or self.task == COFFEE_TASK:
+#				self.weights = 1
+#			elif self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
+#				self.weights = 10
 
 		# initialize start/goal based on task 
 		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
@@ -180,7 +180,7 @@ class PIDVelJaco(object):
 		self.joint_torques = np.zeros((7,1))
 
 		# P, I, D gains 
-		p_gain = 100.0
+		p_gain = 50.0
 		i_gain = 0.0
 		d_gain = 20.0
 		self.P = p_gain*np.eye(7)
@@ -329,12 +329,12 @@ class PIDVelJaco(object):
 				self.expUtil.update_tauH(timestamp, torque_curr)
 
 				self.weights = self.planner.learnWeights(torque_curr)
-				print "here are my new weights: ", self.weights
+				#print "here are my new weights: ", self.weights
 				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
-				self.expUtil.update_weights(timestamp, self.weights)
+				#self.expUtil.update_weights(timestamp, self.weights)
 
 				# store deformed trajectory
 				deformed_traj = self.planner.get_waypts_plan()
@@ -402,7 +402,7 @@ class PIDVelJaco(object):
 				# set start time and the original weights as experimental data
 				self.expUtil.set_startT(self.path_start_T)
 				timestamp = time.time() - self.path_start_T
-				self.expUtil.update_weights(timestamp, self.weights)
+				#self.expUtil.update_weights(timestamp, self.weights)
 			else:
 				#print "NOT AT START"
 				# if not at start of trajectory yet, set starting position 
