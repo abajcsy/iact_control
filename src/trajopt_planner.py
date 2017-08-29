@@ -68,6 +68,15 @@ class Planner(object):
 		self.weights = [0.0,0.0,0.0]
 		self.waypts_prev = None
 
+		# ---- Plotting weights & features over time ---- #
+		self.weight_update = None
+		self.update_time = None
+
+		self.feature_update = None
+		self.prev_features = None
+		self.curr_features = None
+		self.update_time2 = None
+
 		# ---- OpenRAVE Initialization ---- #
 		
 		# initialize robot and empty environment
@@ -405,9 +414,8 @@ class Planner(object):
 		self.waypts_plan = result.GetTraj()
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 
-		print "plotting traj..."
+		bodies = []
 		plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, size=10,color=[0, 0, 1])
-		print "done plotting traj."
 
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
@@ -427,30 +435,50 @@ class Planner(object):
 			Phi_p = np.array([new_features[0], sum(new_features[1]), sum(new_features[2]), sum(new_features[3])])
 			Phi = np.array([old_features[0], sum(old_features[1]), sum(old_features[2]), sum(old_features[3])])
 			
-			update_gain_coffee = 2.0
-			update_gain_table = 2.0
-			update_gain_laptop = 10.0
+			self.prev_features = Phi_p
+			self.curr_features = Phi
+
+			update_gain_coffee = 1.0
+			update_gain_table = 1.0
+			update_gain_laptop = 1.0
 
 			max_weight_coffee = 1.0			
 			max_weight_table = 1.0
-			max_weight_laptop = 10.0
-
+			max_weight_laptop = 1.0
 
 			update = Phi_p - Phi
-			curr_weight = [self.weights[0] - update_gain_coffee*update[1], self.weights[1] - update_gain_table*update[2], self.weights[2] - update_gain_laptop*update[3]]
 
-			if curr_weight[0] > max_weight_coffee:
-				curr_weight[0] = max_weight_coffee
-			elif curr_weight[0] < -max_weight_coffee:
-				curr_weight[0] = -max_weight_coffee
-			if curr_weight[1] > max_weight_table:
-				curr_weight[1] = max_weight_table
-			elif curr_weight[1] < -max_weight_table:
-				curr_weight[1] = -max_weight_table
-			if curr_weight[2] > max_weight_laptop:
-				curr_weight[2] = max_weight_laptop
-			elif curr_weight[2] < -max_weight_laptop:
-				curr_weight[2] = -max_weight_laptop
+			print "update[velocity,coffee,table,laptop] = " + str(update)
+			update_all = False
+				
+			if update_all:
+				# update all weights 
+				curr_weight = [self.weights[0] - update_gain_coffee*update[1], self.weights[1] - update_gain_table*update[2], self.weights[2] - update_gain_laptop*update[3]]		
+			else:
+				# updates only the weight that is most affected (normalized by max value)
+				update[1] = update[1]/max_weight_coffee
+				update[2] = update[2]/max_weight_table
+				update[3] = update[3]/max_weight_laptop
+
+				print "normalized update = " + str(update)
+
+				max_idx = np.argmax(np.fabs(update))
+				print "max_idx: " + str(max_idx)
+				curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
+				if max_idx == 1:
+					print "updating coffee"
+					curr_weight[max_idx-1] = update_gain_coffee*update[max_idx]
+				elif max_idx == 2:
+					print "updating table"
+					curr_weight[max_idx-1] = update_gain_table*update[max_idx]
+				elif max_idx == 3:
+					print "updating laptop"
+					curr_weight[max_idx-1] = update_gain_laptop*update[max_idx]
+
+			# clip values at max and min allowed weights
+			curr_weight[0] = np.clip(curr_weight[0], -max_weight_coffee, max_weight_coffee)
+			curr_weight[1] = np.clip(curr_weight[1], -max_weight_table, max_weight_table)
+			curr_weight[2] = np.clip(curr_weight[2], -max_weight_laptop, max_weight_laptop)
 
 			print "here are the old weights:", self.weights
 			print "here is the new weight:", curr_weight
@@ -564,6 +592,32 @@ class Planner(object):
 		pos = np.array([curr_pos[0][0],curr_pos[1][0],curr_pos[2][0]+math.pi,curr_pos[3][0],curr_pos[4][0],curr_pos[5][0],curr_pos[6][0],0,0,0])
 		
 		self.robot.SetDOFValues(pos)
+
+	def plot_weight_update(self):
+		"""
+		Plots weight update over time.
+		"""
+		
+		#plt.plot(self.update_time,self.weight_update.T[0],linewidth=4.0,label='Vel')
+		plt.plot(self.update_time,self.weight_update.T[0],linewidth=4.0,label='Coffee')
+		plt.plot(self.update_time,self.weight_update.T[1],linewidth=4.0,label='Table')
+		plt.plot(self.update_time,self.weight_update.T[2],linewidth=4.0,label='Laptop')
+		plt.legend()
+		plt.title("Weight (for features) changes over time")
+		plt.show()		
+
+	def plot_feature_update(self):
+		"""
+		Plots feature change over time.
+		"""
+		
+		#plt.plot(self.update_time,self.weight_update.T[0],linewidth=4.0,label='Vel')
+		plt.plot(self.update_time2,self.feature_update.T[1],linewidth=4.0,label='Coffee')
+		plt.plot(self.update_time2,self.feature_update.T[2],linewidth=4.0,label='Table')
+		plt.plot(self.update_time2,self.feature_update.T[3],linewidth=4.0,label='Laptop')
+		plt.legend()
+		plt.title("Feature changes over time")
+		plt.show()		
 
 	def kill_planner(self):
 		"""

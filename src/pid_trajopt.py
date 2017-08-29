@@ -224,6 +224,10 @@ class PIDVelJaco(object):
 		
 		print "----------------------------------"
 
+		self.planner.plot_feature_update()
+		# plot weight update over time
+		self.planner.plot_weight_update()
+
 		# save experimental data (only if experiment started)
 		if self.record and self.reached_start:
 			print "Saving experimental data to file..."
@@ -318,6 +322,25 @@ class PIDVelJaco(object):
 				self.gravity_comp_mode = False
 				print "stopping gravity compensation mode..."
 
+
+		if self.path_start_T is not None:
+			# for tracing weight updates
+			if self.planner.weight_update is None:
+				self.planner.weight_update = np.array([self.planner.weights])
+				self.planner.update_time = np.array([time.time() - self.path_start_T])
+			else:
+				self.planner.weight_update = np.append(self.planner.weight_update,np.array([self.planner.weights]),0)
+				self.planner.update_time = np.append(self.planner.update_time,np.array([time.time() - self.path_start_T]))
+
+
+			if self.planner.feature_update is None and self.planner.curr_features is not None:
+				diff = self.planner.curr_features - self.planner.prev_features
+				self.planner.feature_update = np.array([diff])
+				self.planner.update_time2 = np.array([time.time() - self.path_start_T])
+			elif self.planner.curr_features is not None:
+				diff = self.planner.curr_features - self.planner.prev_features
+				self.planner.feature_update = np.append(self.planner.feature_update,np.array([diff]),0)
+				self.planner.update_time2 = np.append(self.planner.update_time2,np.array([time.time() - self.path_start_T]))
 
 		# if experienced large enough interaction force, then deform traj
 		if self.interaction:
