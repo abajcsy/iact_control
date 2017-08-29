@@ -16,6 +16,7 @@ def initialize(model_filename='jaco', envXML=None):
 	'''
 	Load and configure the JACO robot. If envXML is not None, loads environment.
 	Returns robot and environment.
+	-----
 	NOTE: 
 	IF YOU JUST WANT TO DO COMPUTATIONS THROUGH OPENRAVE
 	AND WANT MULTPILE INSTANCES TO OPEN, THEN HAVE TO TURN OFF
@@ -24,7 +25,7 @@ def initialize(model_filename='jaco', envXML=None):
 	env = openravepy.Environment()
 	if envXML is not None:
 		env.LoadURI(envXML)
-	#env.SetViewer('qtcoin')
+	env.SetViewer('qtcoin')
 
 	# Assumes the robot files are located in the data folder of the
 	# kinova_description package in the catkin workspace.
@@ -38,16 +39,13 @@ def initialize(model_filename='jaco', envXML=None):
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
 	robot.SetDOFValues(robot_starting_dofs)
 
-	"""
 	viewer = env.GetViewer()
-	viewer.SetSize(500,500)
+	viewer.SetSize(700,500)
 	cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
 		   [ 0.02495645,  0.68697757, -0.72624996,  2.04733515],
 		   [ 0.04076329, -0.72657133, -0.68588079,  1.67818344],
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
 	viewer.SetCamera(cam_params)
-	#viewer.SetBkgndColor([0.8,0.8,0.8])
-	"""
 
 	return env, robot
 
@@ -127,7 +125,7 @@ def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
 		bodies.append(body)
 
 
-def plotTraj(env,robot,bodies,waypts, size=0.1, color=[0, 1, 0]):
+def plotTraj(env,robot,bodies,waypts, size=10, color=[0, 1, 0]):
 	"""
 	Plots the best trajectory found or planned
 	"""
@@ -139,30 +137,13 @@ def plotTraj(env,robot,bodies,waypts, size=0.1, color=[0, 1, 0]):
 		coord = robotToCartesian(robot)
 		# sz=0.015
 		# 0.009
-		plotPoint(env, bodies, coord[6], size, color)
+		plotSphere(env, bodies, coord[6], size, color)
 
-def plotPoint(env, bodies, coords, size=0.1, color=[0, 1, 0]):
-	"""
-	Plots a single cube point in OpenRAVE at coords(x,y,z) location
-	"""
-	with env:
-		#c = np.array(color)
-		#body = RaveCreateKinBody(env, '')
-
-		bodies.append(env.plot3(points=coords, pointsize=size, colors=(color[0],color[1],color[2]), drawstyle=1))
-
-		#body.InitFromBoxes(np.array([[coords[0], coords[1], coords[2],
-		#			  size, size, size]]))
-		#body.SetName("pt"+str(len(bodies)))
-		#env.Add(body, True)
-		#body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c)
-		#bodies.append(body)
-
-def plotSphere(env, bodies, coords, size=0.1, color=[0, 0, 1]):
+def plotSphere(env, bodies, coords, size=10, color=[0, 0, 1]):
 	"""
 	Plots a single sphere in OpenRAVE center at coords(x,y,z) location
 	"""
-	bodies.append(env.plot3(points=coords, pointsize=size,  colors=(color[0],color[1],color[2],0.3), drawstyle=1))
+	bodies.append(env.plot3(points=np.array((coords[0],coords[1],coords[2])), pointsize=10, colors=np.array(((color[0],color[1],color[2])))))
 
 def plotTable(env):
 	"""

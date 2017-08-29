@@ -299,12 +299,6 @@ class Planner(object):
 		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
 
-	# -- Mirror -- #
-
-	def mirror_cost(self, waypt):
-		#TODO implement me!
-		return
-
 	# ---- custom constraints --- #
 
 	def table_constraint(self, waypt):
@@ -395,9 +389,9 @@ class Planner(object):
 		prob = trajoptpy.ConstructProblem(s, self.env)
 
 		for t in range(1,self.num_waypts_plan):
-			#prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
+			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
-			#prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
 			#elif self.task == HUMAN_TASK:
 			#	prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
@@ -411,6 +405,9 @@ class Planner(object):
 		self.waypts_plan = result.GetTraj()
 		self.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 
+		print "plotting traj..."
+		plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, size=10,color=[0, 0, 1])
+		print "done plotting traj."
 
 
 	# ---- here's our algorithms for modifying the trajectory ---- #

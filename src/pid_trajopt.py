@@ -279,7 +279,6 @@ class PIDVelJaco(object):
 		Reads the latest torque sensed by the robot and records it for 
 		plotting & analysis
 		"""
-		print "torques callback"
 		# read the current joint torques from the robot
 		torque_curr = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
@@ -345,7 +344,7 @@ class PIDVelJaco(object):
 		Reads the latest position of the robot and publishes an
 		appropriate torque command to move the robot to the target
 		"""
-		print "angles callback"
+	
 		# read the current joint angles from the robot
 		curr_pos = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
