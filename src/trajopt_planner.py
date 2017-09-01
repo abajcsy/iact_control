@@ -77,6 +77,9 @@ class Planner(object):
 		self.curr_features = None
 		self.update_time2 = None
 
+		self.num_f = 3
+		self.P_f = [1.0/self.num_f]*self.num_f
+
 		# ---- OpenRAVE Initialization ---- #
 		
 		# initialize robot and empty environment
@@ -195,7 +198,8 @@ class Planner(object):
 	def coffee_features(self, waypt):
 		"""
 		Computes the distance to table cost for waypoint
-		by checking if the EE is oriented vertically
+		by checking if the EE is oriented vertically.
+		Note: [0,0,1] in the first *column* corresponds to the cup upright
 		---
 		input trajectory, output scalar cost
 		"""
@@ -420,6 +424,23 @@ class Planner(object):
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
 
+	def Pf(self, f_idx):
+		return self.P_f[f_idx]
+
+	def Pdelta(self, delta):
+		norm = np.sum([np.exp(-delta[i]) for i in range(self.num_f)])
+		return np.sum(([(np.exp(-delta[i])/norm)*self.Pf(i) for i in range(self.num_f)]))
+	
+	def Pdelta_givenf(self, delta, f_idx):
+		partition = np.sum([np.exp(-delta[i]) for i in range(self.num_f)])
+		return np.exp(-delta[f_idx])/partition
+
+	def update_Pf(self, delta):
+		new_Pf = [0.0]*self.num_f
+		for f_idx in range(self.num_f):
+			new_Pf[f_idx] = (self.Pdelta_givenf(delta,f_idx)*self.Pf(f_idx))/self.Pdelta(delta)
+		self.P_f = new_Pf
+
 	def learnWeights(self, u_h):
 		"""
 		Deforms the trajectory given human force, u_h, and
@@ -438,50 +459,54 @@ class Planner(object):
 			self.prev_features = Phi_p
 			self.curr_features = Phi
 
-			update_gain_coffee = 1.0
-			update_gain_table = 1.0
-			update_gain_laptop = 1.0
+			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
+			update_gains = [2.0, 2.0, 5.0]
 
-			max_weight_coffee = 1.0			
-			max_weight_table = 1.0
-			max_weight_laptop = 1.0
+			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
+			max_weights = [1.0, 1.0, 5.0] 
 
 			update = Phi_p - Phi
+			which_update = 2 # 1 = update all, 2 = update with max, 3 = update with max P(feature)
 
-			print "update[velocity,coffee,table,laptop] = " + str(update)
-			update_all = False
+			print "Phi prev: " + str(Phi_p)
+			print "Phi curr: " + str(Phi)
+			print "Phi_p - Phi = " + str(update)
 				
-			if update_all:
+			if which_update is 1:
 				# update all weights 
-				curr_weight = [self.weights[0] - update_gain_coffee*update[1], self.weights[1] - update_gain_table*update[2], self.weights[2] - update_gain_laptop*update[3]]		
-			else:
-				# updates only the weight that is most affected (normalized by max value)
-				update[1] = update[1]/max_weight_coffee
-				update[2] = update[2]/max_weight_table
-				update[3] = update[3]/max_weight_laptop
+				curr_weight = [self.weights[0] - update_gains[0]*update[1], self.weights[1] - update_gains[1]*update[2], self.weights[2] - update_gains[2]*update[3]]		
+			elif which_update is 2:
+				change_in_features = [update[1], update[2], update[3]]
 
-				print "normalized update = " + str(update)
-
-				max_idx = np.argmax(np.fabs(update))
-				print "max_idx: " + str(max_idx)
+				# get index of maximal change
+				max_idx = np.argmax(np.fabs(change_in_features))
+				
+				# update only weight of feature with maximal change
 				curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
-				if max_idx == 1:
-					print "updating coffee"
-					curr_weight[max_idx-1] = update_gain_coffee*update[max_idx]
-				elif max_idx == 2:
-					print "updating table"
-					curr_weight[max_idx-1] = update_gain_table*update[max_idx]
-				elif max_idx == 3:
-					print "updating laptop"
-					curr_weight[max_idx-1] = update_gain_laptop*update[max_idx]
+				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*change_in_features[max_idx]
+			else:
+				delta = [update[1], update[2], update[3]]
+
+				# update probability distribution given delta in features
+				print "P_f before: " + str(self.P_f)
+				self.update_Pf(delta)
+				print "P_f after: " + str(self.P_f)
+				
+				# get index of maximal likelihood feature
+				max_idx = np.argmax(self.P_f)
+				
+				# update only weight of feature with maximal change
+				curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
+				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*delta[max_idx]
+
+			print "curr_weight after = " + str(curr_weight)
 
 			# clip values at max and min allowed weights
-			curr_weight[0] = np.clip(curr_weight[0], -max_weight_coffee, max_weight_coffee)
-			curr_weight[1] = np.clip(curr_weight[1], -max_weight_table, max_weight_table)
-			curr_weight[2] = np.clip(curr_weight[2], -max_weight_laptop, max_weight_laptop)
+			for i in range(3):
+				curr_weight[i] = np.clip(curr_weight[i], -max_weights[i], max_weights[i])
 
 			print "here are the old weights:", self.weights
-			print "here is the new weight:", curr_weight
+			print "here are the new weights:", curr_weight
 
 			self.weights = curr_weight
 			return self.weights
