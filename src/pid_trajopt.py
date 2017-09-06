@@ -16,7 +16,8 @@ import thread
 import argparse
 import actionlib
 import time
-import trajopt_planner
+#import trajopt_planner
+import planner
 import traj
 import ros_utils
 import experiment_utils
@@ -44,9 +45,9 @@ place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
 place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
 
-epsilon = 0.10
-MAX_CMD_TORQUE = 40.0
-INTERACTION_TORQUE_THRESHOLD = 8.0
+epsilon = 0.10							# epislon for when robot think it's at goal
+MAX_CMD_TORQUE = 40.0					# max command robot can send
+INTERACTION_TORQUE_THRESHOLD = 8.0		# threshold when interaction is measured 
 
 HUMAN_TASK = 0
 COFFEE_TASK = 1
@@ -149,10 +150,13 @@ class PIDVelJaco(object):
 		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
+		self.curr_pos = None
 
 		# create the trajopt planner and plan from start to goal
-		self.planner = trajopt_planner.Planner(self.task, self.demo)
-		self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+		self.planner = planner.Planner(self.task, self.demo)
+		# stores the current trajectory we are tracking, produced by planner
+		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+		print "original traj: " + str(self.traj)
 
 		# save intermediate target position from degrees (default) to radians 
 		self.target_pos = start.reshape((7,1))
@@ -192,7 +196,7 @@ class PIDVelJaco(object):
 
 		self.expUtil = experiment_utils.ExperimentUtils()
 		# store original trajectory
-		original_traj = self.planner.get_waypts_plan()
+		original_traj = self.traj.get_waypts_plan()
 		self.expUtil.update_original_traj(original_traj)
 
 		# ---- ROS Setup ---- #
@@ -301,15 +305,15 @@ class PIDVelJaco(object):
 				torque_curr[i][0] = 0.0
 		#print "Cleaned torque: " + str(torque_curr)
 
-
-		if self.interaction:
-			timestamp = time.time() - self.path_start_T
-			self.expUtil.update_tauH(timestamp, torque_curr)
-			self.interaction_count += 1
-			self.no_interaction_count = 0
-		else:
-			self.interaction_count = 0
-			self.no_interaction_count += 1
+		if self.path_start_T is not None: # make sure we got to start before allowing interaction!
+			if self.interaction:
+				timestamp = time.time() - self.path_start_T
+				self.expUtil.update_tauH(timestamp, torque_curr)
+				self.interaction_count += 1
+				self.no_interaction_count = 0
+			else:
+				self.interaction_count = 0
+				self.no_interaction_count += 1
 
 
 		if self.methodType == ZERO_FEEDBACK:
@@ -332,7 +336,7 @@ class PIDVelJaco(object):
 				self.planner.weight_update = np.append(self.planner.weight_update,np.array([self.planner.weights]),0)
 				self.planner.update_time = np.append(self.planner.update_time,np.array([time.time() - self.path_start_T]))
 
-
+			# more updates of tracking feature updates
 			if self.planner.feature_update is None and self.planner.curr_features is not None:
 				diff = self.planner.curr_features - self.planner.prev_features
 				self.planner.feature_update = np.array([diff])
@@ -350,16 +354,39 @@ class PIDVelJaco(object):
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
 
-				self.weights = self.planner.learnWeights(torque_curr)
+				# compute the optimal difference in configuration space
+				deltaQDes = self.planner.computeDeltaQDes(self.start, self.goal, self.T, self.traj, timestamp)
+				print "deltaQDes: " + str(deltaQDes)
+
+				# compute argmax of dot product between actual_deltaQ and  des_deltaQ
+				inner_prod = [0.0]*len(self.weights)
+				for i in range(len(self.weights)):
+					des_deltaQ = np.array(deltaQDes[i])
+
+					# compute actual delta q at current time
+					curr_q = self.curr_pos
+					desired_q = self.traj.interpolate(timestamp)
+					actual_deltaQ = desired_q - curr_q
+				
+					#print "des_deltaQ: " + str(des_deltaQ)
+					#print "actual_deltaQ: " + str(actual_deltaQ)
+					# compute dot product between actual and desired changes in configuration
+					inner_prod[i] = np.dot(actual_deltaQ.T,des_deltaQ)[0][0]
+				print "(abs) inner prod: " + str(np.fabs(inner_prod))
+				feat_idx_opt = np.argmax(np.fabs(inner_prod))
+				print "feat_idx_opt: " + str(feat_idx_opt)
+
+				self.weights = self.planner.learnWeights(torque_curr, self.traj, feat_idx=feat_idx_opt)
 				#print "here are my new weights: ", self.weights
-				self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+				self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=self.traj)
+				print "finished planning -- self.traj = " + str(self.traj)
 
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
 				#self.expUtil.update_weights(timestamp, self.weights)
 
 				# store deformed trajectory
-				deformed_traj = self.planner.get_waypts_plan()
+				deformed_traj = self.traj.get_waypts_plan()
 				self.expUtil.update_deformed_traj(deformed_traj)
 
 	def joint_angles_callback(self, msg):
@@ -369,10 +396,10 @@ class PIDVelJaco(object):
 		"""
 	
 		# read the current joint angles from the robot
-		curr_pos = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
+		self.curr_pos = np.array([msg.joint1,msg.joint2,msg.joint3,msg.joint4,msg.joint5,msg.joint6,msg.joint7]).reshape((7,1))
 
 		# convert to radians
-		curr_pos = curr_pos*(math.pi/180.0)	
+		self.curr_pos = self.curr_pos*(math.pi/180.0)	
 
 		# update the OpenRAVE simulation 
 		#self.planner.update_curr_pos(curr_pos)
@@ -380,16 +407,16 @@ class PIDVelJaco(object):
 		# update target position to move to depending on:
 		# - if moving to START of desired trajectory or 
 		# - if moving ALONG desired trajectory
-		self.update_target_pos(curr_pos)
+		self.update_target_pos(self.curr_pos)
 
 		# update the experiment utils executed trajectory tracker
 		if self.reached_start and not self.reached_goal:
 			# update the experimental data with new position
 			timestamp = time.time() - self.path_start_T
-			self.expUtil.update_tracked_traj(timestamp, curr_pos)
+			self.expUtil.update_tracked_traj(timestamp, self.curr_pos)
 
 		# update cmd from PID based on current position
-		self.cmd = self.PID_control(curr_pos)
+		self.cmd = self.PID_control(self.curr_pos)
 
 		# check if each angular torque is within set limits
 		for i in range(7):
@@ -437,7 +464,8 @@ class PIDVelJaco(object):
 			#print "t: " + str(t)
 
 			# get next target position from position along trajectory
-			self.target_pos = self.planner.interpolate(t + 0.1)
+			print "executing path -- self.traj = " + str(self.traj)
+			self.target_pos = self.traj.interpolate(t + 0.1)
 
 			# check if the arm reached the goal, and restart path
 			if not self.reached_goal:

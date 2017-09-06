@@ -77,9 +77,6 @@ class Planner(object):
 		self.curr_features = None
 		self.update_time2 = None
 
-		self.num_f = 3
-		self.P_f = [1.0/self.num_f]*self.num_f
-
 		# ---- OpenRAVE Initialization ---- #
 		
 		# initialize robot and empty environment
@@ -424,22 +421,27 @@ class Planner(object):
 
 	# ---- here's our algorithms for modifying the trajectory ---- #
 
-	def Pf(self, f_idx):
-		return self.P_f[f_idx]
-
-	def Pdelta(self, delta):
-		norm = np.sum([np.exp(-delta[i]) for i in range(self.num_f)])
-		return np.sum(([(np.exp(-delta[i])/norm)*self.Pf(i) for i in range(self.num_f)]))
-	
-	def Pdelta_givenf(self, delta, f_idx):
-		partition = np.sum([np.exp(-delta[i]) for i in range(self.num_f)])
-		return np.exp(-delta[f_idx])/partition
-
-	def update_Pf(self, delta):
-		new_Pf = [0.0]*self.num_f
-		for f_idx in range(self.num_f):
-			new_Pf[f_idx] = (self.Pdelta_givenf(delta,f_idx)*self.Pf(f_idx))/self.Pdelta(delta)
-		self.P_f = new_Pf
+	def computeDeltaQDes(self, start, goal):
+		"""
+		Computes the optimal change in configuration space (delta Q) for each feature.		
+		Returns a dictionary indexed by feature and direction
+		"""
+		num_features = len(self.weights)
+		# save current weights		
+		w_curr = [self.weights[i] for i in range(num_features)]		
+		deltaQdes = {}
+		for f_idx in range(num_features):
+			deltaQdes[f_idx] = {}
+			for direction in [-1,1]:
+				delta = 2.0
+				delta_w = [0.0]*num_features
+				delta_w[f_idx] = delta*self.weights[f_idx]
+				# update weights based on ideal correction for given features and direction
+				self.weights = w_curr + direction*delta_w
+				deltaQdes[f_idx][direction] = traj - self.waypts_plan 
+		# resets the current weights to original weights
+		self.weights = w_curr
+		return deltaQdes
 
 	def learnWeights(self, u_h):
 		"""
@@ -466,7 +468,7 @@ class Planner(object):
 			max_weights = [1.0, 1.0, 5.0] 
 
 			update = Phi_p - Phi
-			which_update = 2 # 1 = update all, 2 = update with max, 3 = update with max P(feature)
+			which_update = 2 # 1 = update all, 2 = update with max, 3 = update with P(delta q | )
 
 			print "Phi prev: " + str(Phi_p)
 			print "Phi curr: " + str(Phi)
@@ -484,20 +486,6 @@ class Planner(object):
 				# update only weight of feature with maximal change
 				curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
 				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*change_in_features[max_idx]
-			else:
-				delta = [update[1], update[2], update[3]]
-
-				# update probability distribution given delta in features
-				print "P_f before: " + str(self.P_f)
-				self.update_Pf(delta)
-				print "P_f after: " + str(self.P_f)
-				
-				# get index of maximal likelihood feature
-				max_idx = np.argmax(self.P_f)
-				
-				# update only weight of feature with maximal change
-				curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
-				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*delta[max_idx]
 
 			print "curr_weight after = " + str(curr_weight)
 
