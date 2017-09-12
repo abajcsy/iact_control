@@ -57,6 +57,10 @@ LAPTOP_TASK = 3
 ZERO_FEEDBACK = 'A'
 HAPTIC_FEEDBACK = 'B'
 
+ALL = 0 						# updates all features
+MAX = 1							# updates only feature that changed the most
+LIKELY = 2						# updates the most likely feature 
+
 class PIDVelJaco(object): 
 	"""
 	This class represents a node that moves the Jaco with PID control.
@@ -82,7 +86,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, ID, task, methodType, demo, record):
+	def __init__(self, ID, task, methodType, demo, record, learn_method):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -92,6 +96,9 @@ class PIDVelJaco(object):
 
 		# method type - A=IMPEDANCE, B=LEARNING
 		self.methodType = methodType
+
+		# can be ALL, MAX, or LIKELY
+		self.learn_method = learn_method
 
 		# optimal demo mode
 		if demo == "F" or demo == "f":
@@ -153,7 +160,7 @@ class PIDVelJaco(object):
 		self.curr_pos = None
 
 		# create the trajopt planner and plan from start to goal
-		self.planner = planner.Planner(self.task, self.demo)
+		self.planner = planner.Planner(self.task, self.demo, self.learn_method)
 		# stores the current trajectory we are tracking, produced by planner
 		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
 		print "original traj: " + str(self.traj)
@@ -228,7 +235,7 @@ class PIDVelJaco(object):
 		
 		print "----------------------------------"
 
-		self.planner.plot_feature_update()
+		#self.planner.plot_feature_update()
 		# plot weight update over time
 		self.planner.plot_weight_update()
 
@@ -464,7 +471,6 @@ class PIDVelJaco(object):
 			#print "t: " + str(t)
 
 			# get next target position from position along trajectory
-			print "executing path -- self.traj = " + str(self.traj)
 			self.target_pos = self.traj.interpolate(t + 0.1)
 
 			# check if the arm reached the goal, and restart path
@@ -488,16 +494,17 @@ class PIDVelJaco(object):
 				self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 6:
-		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record"
+	if len(sys.argv) < 7:
+		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, learn_method"
 	else:	
 		ID = int(sys.argv[1])
 		task = int(sys.argv[2])
 		methodType = sys.argv[3]
 		demo = sys.argv[4]
 		record = sys.argv[5]
+		learn_method = int(sys.argv[6])
 
-		PIDVelJaco(ID,task,methodType,demo,record)
+		PIDVelJaco(ID,task,methodType,demo,record, learn_method)
 
 
 """

@@ -114,6 +114,7 @@ class ExperimentUtils(object):
 			- effort		sets up graphing for task effort comparison
 			- time			sets up graphing for task time comparison
 			- cost 			sets up graphing for task cost comparison	
+			- weight 		sets up graphing for weight comparison
 		"""
 		ind = np.arange(3)  # the x locations for the groups
 		width = 0.45       # the width of the bars
@@ -183,9 +184,16 @@ class ExperimentUtils(object):
 					astyle = '-[, widthB=1.8, lengthB=1.2'
 					ax_xoffset = -0.12
 					ax_yoffset = 6
+				elif plotType is "weight":
+					x = rects[i].get_x() + rects[i].get_width()
+					y = std[i]+height+0.5
+					xoffset = 0.0
+					yoffset = 1.0
+					astyle = '-[, widthB=2.5, lengthB=1.2'
+					ax_xoffset = 0
+					ax_yoffset = 0.8
 
 				ax.annotate(r'\textbf{*}', xy=(x,y), xytext=(x+xoffset,y+yoffset), xycoords='data', fontsize=18, ha='center', va='bottom',arrowprops=dict(arrowstyle=astyle, lw=1.5))
-
 				ax.text(x+ax_xoffset,y+ax_yoffset,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=15)
 
 		#ptime = []
@@ -207,7 +215,7 @@ class ExperimentUtils(object):
 		if avgOpt is not None:
 			ax.set_xticks(ind+width+width/2+offset)
 
-		xlabels = ["Cup","Table","Laptop"]#["T"+str(t+1) for t in range(3)]
+		xlabels = ["Cup","Table","Laptop"]
 		ax.set_xticklabels(xlabels,10,fontsize=18)
  
 		# remove the plot frame lines
@@ -372,7 +380,13 @@ class ExperimentUtils(object):
 			print "Saved effort figure." 
 
 	def plot_taskEffortTime(self, filename, saveFig=False, saveName="taskEffortTime"):
-
+		"""
+		Takes all participant data files and produces bar chart
+		comparing average interaction time for each task
+		----
+		saveFig 	if True, saves final plot
+		saveName	name of saved output file (will be saved as .pdf)
+		"""
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 		sumA = [0.0,0.0,0.0]
@@ -415,7 +429,13 @@ class ExperimentUtils(object):
 
 
 	def plot_taskCost(self, filename, saveFig=False, saveName="taskCost"):
-
+		"""
+		Takes all participant data files and produces bar chart
+		comparing cumulative cost for each task
+		----
+		saveFig 	if True, saves final plot
+		saveName	name of saved output file (will be saved as .pdf)
+		"""
 		metrics = self.parse_metrics(filename)
 		# store avg for trial 1,2,3
 	

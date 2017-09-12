@@ -34,6 +34,16 @@ LAPTOP_TASK = 3
 OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 HUMAN_CENTER = [0.0, 0.2, 0.0]
 
+# possible range of feature values for each feature
+CUP_RANGE = 17.12161451
+TABLE_RANGE = 10.28238132
+LAPTOP_RANGE = 9.99367477
+
+# feature learning methods
+ALL = 0 						# updates all features
+MAX = 1							# updates only feature that changed the most
+LIKELY = 2						# updates the most likely feature 
+
 class Planner(object):
 	"""
 	This class plans a trajectory from start to goal using trajectory optimization.
@@ -42,7 +52,7 @@ class Planner(object):
 		demo 		if in demo mode, returns optimal trajectory for given task
 	"""
 
-	def __init__(self, task, demo):
+	def __init__(self, task, demo, learn_method):
 
 		# ---- Important internal variables ---- #
 
@@ -52,6 +62,8 @@ class Planner(object):
 			self.MAX_ITER = 40				# allows you to set max iterations of trajopt
 		else:
 			self.MAX_ITER = 40
+
+		self.learn_method = learn_method	# can be ALL, MAX, or LIKELY
 
 		self.start_time = None				# start time of trajectory
 		self.final_time = None				# end time of trajectory
@@ -392,8 +404,8 @@ class Planner(object):
 		result = trajoptpy.OptimizeProblem(prob)
 		waypts_plan = result.GetTraj()
 
-		bodies = []
-		plotTraj(self.env,self.robot,self.bodies,waypts_plan, size=10,color=[0, 0, 1])
+		#bodies = []
+		#plotTraj(self.env,self.robot,self.bodies,waypts_plan, size=10,color=[0, 0, 1])
 
 		return waypts_plan
 
@@ -462,7 +474,7 @@ class Planner(object):
 			self.curr_features = Phi
 
 			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
-			update_gains = [2.0, 2.0, 5.0]
+			update_gains = [1.0, 1.0, 5.0]
 
 			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
 			max_weights = [1.0, 1.0, 5.0] 
@@ -475,24 +487,26 @@ class Planner(object):
 			print "Phi curr: " + str(Phi)
 			print "Phi_p - Phi = " + str(update)
 				
-			if feat_idx is None:
+			if self.learn_method == ALL:
 				# update all weights 
 				curr_weight = [self.weights[0] - update_gains[0]*update[1], self.weights[1] - update_gains[1]*update[2], self.weights[2] - update_gains[2]*update[3]]	
-			else:
+			elif self.learn_method == MAX:
+				print "updating only largest changed feature"
+
+				# get the change in features normalized by the range of the feature
+				change_in_features = [update[1]/CUP_RANGE, update[2]/TABLE_RANGE, update[3]/LAPTOP_RANGE]
+
+				# get index of maximal change
+				max_idx = np.argmax(np.fabs(change_in_features))
+				
+				# update only weight of feature with maximal change
+				curr_weight = [self.weights[i] for i in range(len(self.weights))]
+				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*update[max_idx+1]
+			elif self.learn_method == LIKELY:
 				print "updating only highest likelihood feature: " + str(feat_idx)
 				# update only weight with highest likelihood of being changed
 				curr_weight = [self.weights[i] for i in range(len(self.weights))]
 				curr_weight[feat_idx] = self.weights[feat_idx] - update_gains[feat_idx]*update[feat_idx+1]
-			
-			#elif which_update is 2:
-				#change_in_features = [update[1], update[2], update[3]]
-
-				# get index of maximal change
-				#max_idx = np.argmax(np.fabs(change_in_features))
-				
-				# update only weight of feature with maximal change
-				#curr_weight = [self.weights[0], self.weights[1], self.weights[2]]
-				#curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*change_in_features[max_idx]
 
 			print "curr_weight after = " + str(curr_weight)
 
@@ -509,7 +523,7 @@ class Planner(object):
 
 	# ---- Replanning ---- #
 
-	def replan(self, start, goal, weights, start_time, final_time, step_time, seed=None):
+	def replan(self, start, goal, weights, start_time, final_time, step_time, seed=None, color=[0, 0, 1]):
 		"""
 		Replan the trajectory from start to goal given weights.
 		---
@@ -525,6 +539,7 @@ class Planner(object):
 		if weights == None:
 			return
 
+		self.weights = weights
 		self.start_time = start_time
 		self.final_time = final_time
 		optTraj = traj.Trajectory()
@@ -536,13 +551,19 @@ class Planner(object):
 		optTraj.final_time = final_time
 		optTraj.step_time_plan = (self.final_time - self.start_time)/(self.num_waypts_plan - 1)
 		
-		print "waypts_plan after trajopt: " + str(optTraj.waypts_plan)
+		#print "waypts_plan after trajopt: " + str(optTraj.waypts_plan)
 		optTraj.upsample(step_time)
-		print "waypts_plan after upsampling: " + str(optTraj.waypts_plan)
-		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, [0, 0, 1])
+		#print "waypts_plan after upsampling: " + str(optTraj.waypts_plan)
+		#plotTraj(self.env,self.robot,self.bodies,optTraj.waypts_plan, color=color)
 		return optTraj
 
 	# ----- Plotting based on plan ----- #
+
+	def plotWaypts(self, waypts, color=[0,0,1]):
+		"""
+		Plots the given waypoints
+		"""
+		plotTraj(self.env,self.robot,self.bodies,waypts, color=color)
 
 	def update_curr_pos(self, curr_pos):
 		"""
@@ -564,6 +585,8 @@ class Planner(object):
 		plt.plot(self.update_time,self.weight_update.T[1],linewidth=4.0,label='Table')
 		plt.plot(self.update_time,self.weight_update.T[2],linewidth=4.0,label='Laptop')
 		plt.legend()
+		x1,x2,y1,y2 = plt.axis()
+		plt.axis((0,16,-1.5,1.5))
 		plt.title("Weight (for features) changes over time")
 		plt.show()		
 

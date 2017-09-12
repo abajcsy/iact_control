@@ -44,7 +44,6 @@ def compute_effort(data):
 	effort = 0.0
 	for t in range(w):
 		joint = edata[:,t]
-		#NOTE: used to be 2-norm: norm = np.linalg.norm(joint)
 		total = np.sum(np.abs(joint))
 		effort += total
 
