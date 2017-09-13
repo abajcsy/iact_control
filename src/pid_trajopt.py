@@ -44,6 +44,10 @@ pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
 place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
 place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
+pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 400.0] #200.0]
+place_lower_EEtilt = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 400.0]
+
+place_pose = [-0.46513, 0.29041, 0.69497] # x, y, z for pick_lower_EEtilt
 
 epsilon = 0.10							# epislon for when robot think it's at goal
 MAX_CMD_TORQUE = 40.0					# max command robot can send
@@ -86,7 +90,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, ID, task, methodType, demo, record, learn_method):
+	def __init__(self, ID, task, methodType, demo, record, featMethod):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -98,7 +102,7 @@ class PIDVelJaco(object):
 		self.methodType = methodType
 
 		# can be ALL, MAX, or LIKELY
-		self.learn_method = learn_method
+		self.featMethod = featMethod
 
 		# optimal demo mode
 		if demo == "F" or demo == "f":
@@ -134,7 +138,9 @@ class PIDVelJaco(object):
 		self.T = 15.0
 
 		# initialize trajectory weights
-		self.weights = [0.0, 0.0, 0.0]
+		# TODO CHANGE THIS BACK TO 0!
+		self.weights = [1.0, 0.0, 0.0]
+
 		# if in demo mode, then set the weights to be optimal
 #		if self.demo:
 #			if self.task == TABLE_TASK or self.task == COFFEE_TASK:
@@ -146,7 +152,7 @@ class PIDVelJaco(object):
 		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
 			pick = pick_shelf
 		else:
-			pick = pick_basic
+			pick = pick_basic #pick_basic_EEtilt
 
 		if self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
 			place = place_higher
@@ -157,12 +163,17 @@ class PIDVelJaco(object):
 		goal = np.array(place)*(math.pi/180.0)
 		self.start = start
 		self.goal = goal
+
+		# TODO THIS IS TEMPORARY?		
+		self.place_pose = place_pose
+		
 		self.curr_pos = None
 
 		# create the trajopt planner and plan from start to goal
-		self.planner = planner.Planner(self.task, self.demo, self.learn_method)
+		self.planner = planner.Planner(self.task, self.demo, self.featMethod)
 		# stores the current trajectory we are tracking, produced by planner
-		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)
+		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)		
+		#self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, goal_pose=self.place_pose)
 		print "original traj: " + str(self.traj)
 
 		# save intermediate target position from degrees (default) to radians 
@@ -361,6 +372,7 @@ class PIDVelJaco(object):
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
 
+				"""
 				# compute the optimal difference in configuration space
 				deltaQDes = self.planner.computeDeltaQDes(self.start, self.goal, self.T, self.traj, timestamp)
 				print "deltaQDes: " + str(deltaQDes)
@@ -372,6 +384,7 @@ class PIDVelJaco(object):
 
 					# compute actual delta q at current time
 					curr_q = self.curr_pos
+					if self.traj is not None:
 					desired_q = self.traj.interpolate(timestamp)
 					actual_deltaQ = desired_q - curr_q
 				
@@ -382,11 +395,15 @@ class PIDVelJaco(object):
 				print "(abs) inner prod: " + str(np.fabs(inner_prod))
 				feat_idx_opt = np.argmax(np.fabs(inner_prod))
 				print "feat_idx_opt: " + str(feat_idx_opt)
+				"""
 
-				self.weights = self.planner.learnWeights(torque_curr, self.traj, feat_idx=feat_idx_opt)
+				self.weights = self.planner.learnWeights(torque_curr, self.traj) #feat_idx=feat_idx_opt
 				#print "here are my new weights: ", self.weights
-				self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=self.traj)
-				print "finished planning -- self.traj = " + str(self.traj)
+
+				print "in joint torques callback: going to plan..."
+				self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=self.traj)				
+				#self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=self.traj, goal_pose=self.place_pose)
+				print "in joint torques callback: finished planning -- self.traj = " + str(self.traj)
 
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
@@ -472,7 +489,7 @@ class PIDVelJaco(object):
 
 			# get next target position from position along trajectory
 			self.target_pos = self.traj.interpolate(t + 0.1)
-
+			
 			# check if the arm reached the goal, and restart path
 			if not self.reached_goal:
 			
@@ -495,16 +512,16 @@ class PIDVelJaco(object):
 
 if __name__ == '__main__':
 	if len(sys.argv) < 7:
-		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, learn_method"
+		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, featMethod"
 	else:	
 		ID = int(sys.argv[1])
 		task = int(sys.argv[2])
 		methodType = sys.argv[3]
 		demo = sys.argv[4]
 		record = sys.argv[5]
-		learn_method = int(sys.argv[6])
+		featMethod = int(sys.argv[6])
 
-		PIDVelJaco(ID,task,methodType,demo,record, learn_method)
+		PIDVelJaco(ID,task,methodType,demo,record, featMethod)
 
 
 """

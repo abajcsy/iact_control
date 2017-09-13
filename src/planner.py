@@ -12,6 +12,8 @@ from sympy import lambdify
 import traj
 
 import trajoptpy
+import trajoptpy.kin_utils as ku
+
 import or_trajopt
 import openravepy
 from openravepy import *
@@ -52,7 +54,7 @@ class Planner(object):
 		demo 		if in demo mode, returns optimal trajectory for given task
 	"""
 
-	def __init__(self, task, demo, learn_method):
+	def __init__(self, task, demo, featMethod):
 
 		# ---- Important internal variables ---- #
 
@@ -63,7 +65,7 @@ class Planner(object):
 		else:
 			self.MAX_ITER = 40
 
-		self.learn_method = learn_method	# can be ALL, MAX, or LIKELY
+		self.featMethod = featMethod	# can be ALL, MAX, or LIKELY
 
 		self.start_time = None				# start time of trajectory
 		self.final_time = None				# end time of trajectory
@@ -91,7 +93,7 @@ class Planner(object):
 
 		# insert any objects you want into environment
 		self.bodies = []
-	
+
 		# plot the table and table mount and environment objects
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
@@ -186,7 +188,21 @@ class Planner(object):
 			waypt[2] += math.pi
 		self.robot.SetDOFValues(waypt)
 		EE_link = self.robot.GetLinks()[7]
-		return sum(abs(EE_link.GetTransform()[:2,:3].dot([1,0,0])))
+		#coffee_feature = sum(abs(EE_link.GetTransform()[:2,:3].dot([1,0,0])))
+
+		tf = EE_link.GetTransform()[:3,:3]
+
+		# rotates all bodies along world z-direction by 45 degrees
+		#Tz = matrixFromAxisAngle([0,0,np.pi/4])
+
+		r_x = abs(tf[1][1])+abs(tf[2][1]) #+abs(tf[0][1]) 
+		r_y = abs(tf[0][2])+abs(tf[2][2]) #+abs(tf[1][2])
+		r_z = abs(tf[0][0])+abs(tf[1][0]) #+abs(tf[2][0])
+
+		coffee_feature = r_x
+
+		#print "coffee_feature: " + str(coffee_feature)
+		return coffee_feature
 
 	def coffee_cost(self, waypt):
 		"""
@@ -289,7 +305,6 @@ class Planner(object):
 		feature = self.human_features(curr_waypt,prev_waypt)
 		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
 
-
 	# ---- Custom constraints --- #
 
 	def table_constraint(self, waypt):
@@ -332,7 +347,89 @@ class Planner(object):
 
 
 	# ---- Here's trajOpt --- #
-		
+
+	def trajOptPose(self, start, goal, goal_pose):
+		"""
+		Computes a plan from start to goal using trajectory optimizer.
+		Goal is a pose, not a configuration!
+		Reference: http://joschu.net/docs/trajopt-paper.pdf
+		---
+		input:
+			start and goal pos, and a trajectory to seed trajopt with
+		return: 
+			the waypts_plan trajectory 
+		"""
+
+		print "I'm in trajopt pose!"		
+
+		# plot goal point
+		#plotSphere(self.env, self.bodies, goal_pose, size=20)
+	
+		if len(start) < 10:
+			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
+		self.robot.SetDOFValues(aug_start)
+
+		self.num_waypts_plan = 4
+
+		xyz_target = goal_pose
+		quat_target = [1,0,0,0] # wxyz
+	
+		init_joint_target =  goal #[3.67915406, 1.77325452, 3.35103216, 2.00189265, 3.8781216, 4.29525529, 6.98131701]
+
+		request = {
+			"basic_info": {
+				"n_steps": self.num_waypts_plan,
+				"manip" : "j2s7s300",
+				"start_fixed" : True,
+				"max_iter" : self.MAX_ITER
+			},
+			"costs": [
+			{
+				"type": "joint_vel",
+				"params": {"coeffs": [1.0]}
+			}
+			],
+			"constraints": [
+			{
+				"type": "pose",
+				"params" : {"xyz" : xyz_target, 
+						    "wxyz" : quat_target, 
+						    "link": "j2s7s300_link_7",
+							"rot_coeffs" : [0,0,0],
+							"pos_coeffs" : [100,100,100],
+						    }
+			}
+			],
+			"init_info": {
+                "type": "straight_line",
+                "endpoint": init_joint_target.tolist()
+			}
+		}
+
+		s = json.dumps(request)
+		prob = trajoptpy.ConstructProblem(s, self.env)
+
+		for t in range(1,self.num_waypts_plan):
+			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
+			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
+			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+
+		for t in range(1,self.num_waypts_plan - 1):
+			prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "up%i"%t)
+
+		result = trajoptpy.OptimizeProblem(prob)
+		waypts_plan = result.GetTraj()
+
+		# plot resulting trajectory
+		plotTraj(self.env,self.robot,self.bodies,waypts_plan, size=10,color=[0, 0, 1])
+		#time.sleep(10)
+
+		print "I'm done with trajopt pose!"
+
+		return waypts_plan
+
+
+
 	def trajOpt(self, start, goal, traj_seed=None):
 		"""
 		Computes a plan from start to goal using trajectory optimizer.
@@ -343,6 +440,7 @@ class Planner(object):
 		return: 
 			the waypts_plan trajectory 
 		"""
+
 		if len(start) < 10:
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
 		self.robot.SetDOFValues(aug_start)
@@ -401,6 +499,7 @@ class Planner(object):
 			#prob.AddConstraint(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "EQ", "up%i"%t)
 			#prob.AddConstraint(self.coffee_constraint, self.coffee_constraint_derivative, [(t,j) for j in range(7)], "EQ", "up%i"%t)
 
+		print "optimizing problem..."
 		result = trajoptpy.OptimizeProblem(prob)
 		waypts_plan = result.GetTraj()
 
@@ -474,10 +573,10 @@ class Planner(object):
 			self.curr_features = Phi
 
 			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
-			update_gains = [1.0, 1.0, 5.0]
+			update_gains = [2.0, 2.0, 10.0]
 
 			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
-			max_weights = [1.0, 1.0, 5.0] 
+			max_weights = [1.0, 1.0, 10.0] 
 
 			update = Phi_p - Phi
 			# 1 = update all, 2 = update with max, 3 = update with P(delta q | delta q des)
@@ -487,11 +586,12 @@ class Planner(object):
 			print "Phi curr: " + str(Phi)
 			print "Phi_p - Phi = " + str(update)
 				
-			if self.learn_method == ALL:
+			if self.featMethod == ALL:
 				# update all weights 
+				print "updating ALL features"
 				curr_weight = [self.weights[0] - update_gains[0]*update[1], self.weights[1] - update_gains[1]*update[2], self.weights[2] - update_gains[2]*update[3]]	
-			elif self.learn_method == MAX:
-				print "updating only largest changed feature"
+			elif self.featMethod == MAX:
+				print "updating ONE (MAX) feature"
 
 				# get the change in features normalized by the range of the feature
 				change_in_features = [update[1]/CUP_RANGE, update[2]/TABLE_RANGE, update[3]/LAPTOP_RANGE]
@@ -502,7 +602,7 @@ class Planner(object):
 				# update only weight of feature with maximal change
 				curr_weight = [self.weights[i] for i in range(len(self.weights))]
 				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*update[max_idx+1]
-			elif self.learn_method == LIKELY:
+			elif self.featMethod == LIKELY:
 				print "updating only highest likelihood feature: " + str(feat_idx)
 				# update only weight with highest likelihood of being changed
 				curr_weight = [self.weights[i] for i in range(len(self.weights))]
@@ -523,7 +623,7 @@ class Planner(object):
 
 	# ---- Replanning ---- #
 
-	def replan(self, start, goal, weights, start_time, final_time, step_time, seed=None, color=[0, 0, 1]):
+	def replan(self, start, goal, weights, start_time, final_time, step_time, seed=None, goal_pose=None, color=[0, 0, 1]):
 		"""
 		Replan the trajectory from start to goal given weights.
 		---
@@ -543,8 +643,13 @@ class Planner(object):
 		self.start_time = start_time
 		self.final_time = final_time
 		optTraj = traj.Trajectory()
+		#print "optTraj at beginning: " + str(optTraj)
+
 		# compute optimal waypts using trajopt
+		#optTraj.waypts_plan = self.trajOptPose(start, goal, goal_pose)
 		optTraj.waypts_plan = self.trajOpt(start, goal, traj_seed=seed)
+
+		#print "optTraj waypts_plan: " + str(optTraj.waypts_plan)
 		optTraj.curr_waypt_idx = 0
 		optTraj.num_waypts_plan = self.num_waypts_plan
 		optTraj.start_time = start_time
@@ -553,8 +658,9 @@ class Planner(object):
 		
 		#print "waypts_plan after trajopt: " + str(optTraj.waypts_plan)
 		optTraj.upsample(step_time)
-		#print "waypts_plan after upsampling: " + str(optTraj.waypts_plan)
-		#plotTraj(self.env,self.robot,self.bodies,optTraj.waypts_plan, color=color)
+		#print "optTraj waypts after upsampling: " + str(optTraj.waypts)
+		#plotTraj(self.env,self.robot,self.bodies,optTraj.waypts, color=color)
+		#print "optTraj at end: " + str(optTraj)
 		return optTraj
 
 	# ----- Plotting based on plan ----- #
@@ -612,3 +718,38 @@ class Planner(object):
 		self.env.Destroy()
 		RaveDestroy() # destroy the runtime
 	
+if __name__ == '__main__':
+	
+	pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 400.0] #200.0]
+	place_lower_EEtilt = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 400.0]
+
+	place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+
+	#place_pose = [-0.58218719,  0.33018986,  0.10592141] # x, y, z for pick_lower_EEtilt
+
+	# initialize start/goal based on task 
+	pick = pick_basic_EEtilt #pick = pick_basic
+	place = place_lower #place = place_lower
+
+	start = np.array(pick)*(math.pi/180.0)
+	goal = np.array(place)*(math.pi/180.0)
+
+	weights = [0.0, 0.0, 0.0]
+	T = 15.0
+
+	planner = Planner(2, False, 0)
+
+	if len(goal) < 10:
+		waypt = np.append(goal.reshape(7), np.array([0,0,0]), 1)
+		#waypt[2] += math.pi
+	planner.robot.SetDOFValues(waypt)
+	coords = robotToCartesian(planner.robot)
+	place_pose = [coords[6][0], coords[6][1], coords[6][2]]
+	print place_pose
+
+	#traj = planner.replan(start, goal, weights, 0.0, T, 0.5)	
+	traj = planner.replan(start, place_pose, weights, 0.0, T, 0.5)
+
+
+
+
