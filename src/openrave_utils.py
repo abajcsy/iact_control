@@ -88,7 +88,7 @@ def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
 	Plots trajectory of the cup
 	"""
 
-	for i in range(0,len(waypts),10):
+	for i in range(0,len(waypts)):
 		waypoint = waypts[i]
 		dof = np.append(waypoint, np.array([1, 1, 1]))
 		dof[2] += math.pi
@@ -120,10 +120,26 @@ def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
 
 		body = mug
 		body.SetName("pt"+str(len(bodies)))
-		print mug.GetLinks()[0].GetGeometries()[0].GetDiffuseColor()
 		env.Add(body, True)
 		bodies.append(body)
 
+def plotMug(env, bodies, transform, color=[1,0,0]):
+	"""
+	Plots mug at specific transform
+	"""
+	objects_path = find_in_workspaces(
+				project='iact_control',
+				path='src/data',
+				first_match_only=True)[0]
+	env.Load('{:s}/mug1.dae'.format(objects_path))
+	mug = env.GetKinBody('mug')
+	mug.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(np.array(color))
+	mug.SetTransform(transform)
+	body = mug
+	body.SetName("pt"+str(len(bodies)))
+	env.Add(body, True)
+	bodies.append(body)
+	return mug
 
 def plotTraj(env,robot,bodies,waypts, size=10, color=[0, 1, 0]):
 	"""
@@ -181,6 +197,7 @@ def plotCabinet(env):
 	color = np.array([0.05,0.6,0.3])
 	cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 
+"""
 def plotMug(env):
 	# load table into environment
 	objects_path = find_in_workspaces(
@@ -188,6 +205,7 @@ def plotMug(env):
 			path='src/data',
 			first_match_only=True)[0]
 	env.Load('{:s}/mug.xml'.format(objects_path))
+"""
 
 def plotMan(env):
 	"""
