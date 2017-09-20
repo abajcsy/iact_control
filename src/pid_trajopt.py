@@ -39,9 +39,9 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
+pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] #310.8]
 pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
-place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0] 
 place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
 pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] #200.0]
@@ -54,7 +54,7 @@ MAX_CMD_TORQUE = 40.0					# max command robot can send
 INTERACTION_TORQUE_THRESHOLD = 8.0		# threshold when interaction is measured 
 
 HUMAN_TASK = 0
-COFFEE_TASK = 1
+COFFEE_TASK = 1 
 TABLE_TASK = 2
 LAPTOP_TASK = 3
 
