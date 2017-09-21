@@ -65,7 +65,7 @@ class Planner(object):
 		if self.demo:
 			self.MAX_ITER = 40
 		else:
-			self.MAX_ITER = 40
+			self.MAX_ITER = 20
 
 		self.featMethod = featMethod	# can be ALL, MAX, or LIKELY
 		self.numFeat = numFeat			# can be ONE_FEAT or TWO_FEAT
@@ -536,7 +536,7 @@ class Planner(object):
 		else:
 			print "using traj seed!"
 			# TODO THIS IS EXPERIMENTAL
-			init_waypts = traj_seed#traj_seed.waypts_plan
+			init_waypts = traj_seed #traj_seed.waypts_plan
 			print init_waypts
 		
 		request = {
@@ -570,11 +570,7 @@ class Planner(object):
 			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
-
-
-			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)			
-
-
+			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)	
 			#elif self.task == HUMAN_TASK:
 			#	prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
@@ -591,6 +587,8 @@ class Planner(object):
 
 		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, size=10,color=[0, 0, 1])
 		plotCupTraj(self.env,self.robot,self.bodies,self.waypts_plan,color=[0,1,0])
+
+		return self.waypts_plan
 
 
 	# ---- here's our algorithms for modifying the trajectory ---- #

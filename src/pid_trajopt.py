@@ -187,7 +187,7 @@ class PIDVelJaco(object):
 		#self.planner = planner.Planner(self.task, self.demo, self.featMethod)
 		
 		# stores the current trajectory we are tracking, produced by planner
-		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5)		
+		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=None)		
 		#self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, goal_pose=self.place_pose)
 		print "original traj: " + str(self.traj)
 
