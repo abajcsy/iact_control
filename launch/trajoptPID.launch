@@ -4,7 +4,7 @@
 	<arg name="ID" default="0"/>
 
 	<!-- Experimental task (0,1,2,3) -->
-	<arg name="task" default="0"/> 
+	<arg name="task" default="2"/> 
 
 	<!-- Method type ('A'- impedance, 'B'- learning, 'C'- demonstration) -->
 	<arg name="methodType" default="A"/>
@@ -15,10 +15,13 @@
 	<!-- Record data mode -->
 	<arg name="record" default="F"/>
 
-	<!-- Feature learning method (0 = ALL, 1 = MAX, 2 = LIKELY)-->
-	<arg name="featMethod" default="0"/>
+	<!-- Feature learning method (ALL, MAX, LIKELY)-->
+	<arg name="featMethod" default="ALL"/>
+
+	<!-- How many features need correcting (1 = ONE_FEAT, 2 = TWO_FEAT)-->
+	<arg name="numFeat" default="1"/>
 
 	<!-- velocity-based with trajopt planning PID -->
-	<node name="pid_trajopt" pkg="iact_control" type="pid_trajopt.py" args="$(arg ID) $(arg task) $(arg methodType) $(arg demo) $(arg record) $(arg featMethod)" output="screen"/>
+	<node name="pid_trajopt" pkg="iact_control" type="pid_trajopt.py" args="$(arg ID) $(arg task) $(arg methodType) $(arg demo) $(arg record) $(arg featMethod) $(arg numFeat)" output="screen"/>
 
 </launch>

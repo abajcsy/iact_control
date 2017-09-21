@@ -38,13 +38,17 @@ COFFEE_TASK = 1
 TABLE_TASK = 2
 LAPTOP_TASK = 3
 
+#OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 HUMAN_CENTER = [0.0, 0.2, 0.0]
 
 # feature learning methods
-ALL = 0 						# updates all features
-MAX = 1							# updates only feature that changed the most
-LIKELY = 2						# updates the most likely feature 
+ALL = "ALL" 							# updates all features
+MAX = "MAX"								# updates only feature that changed the most
+LIKELY = "LIKELY"						# updates the most likely feature 
+
+ONE_FEAT = 1					# experiment where human has to correct only one feature (out of three)
+TWO_FEAT = 2					# experiment where human has to correc two features
 
 class Planner(object):
 	"""
@@ -52,7 +56,7 @@ class Planner(object):
 	with TrajOpt. 
 	"""
 
-	def __init__(self, task, demo, featMethod):
+	def __init__(self, task, demo, featMethod, numFeat):
 
 		# ---- important internal variables ---- #
 
@@ -64,6 +68,7 @@ class Planner(object):
 			self.MAX_ITER = 40
 
 		self.featMethod = featMethod	# can be ALL, MAX, or LIKELY
+		self.numFeat = numFeat			# can be ONE_FEAT or TWO_FEAT
 
 		self.start_time = None
 		self.final_time = None
@@ -104,7 +109,7 @@ class Planner(object):
 		# plot the table and table mount
 		plotTable(self.env)
 		plotTableMount(self.env,self.bodies)
-		plotLaptop(self.env,self.bodies)
+		plotLaptop(self.env,self.bodies,OBS_CENTER)
 		plotCabinet(self.env)
 		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
 		#plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
@@ -343,10 +348,10 @@ class Planner(object):
 
 	def human_dist(self, waypt):
 		"""
-		Computes distance from end-effector to laptop in xy coords
+		Computes distance from end-effector to human in xy coords
 		input trajectory, output scalar distance where 
-			0: EE is at more than 0.4 meters away from laptop
-			+: EE is closer than 0.4 meters to laptop
+			0: EE is at more than 0.4 meters away from human
+			+: EE is closer than 0.4 meters to human
 		"""
 		if len(waypt) < 10:
 			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
@@ -385,6 +390,9 @@ class Planner(object):
 		self.robot.SetDOFValues(waypt)
 		EE_link = self.robot.GetLinks()[10]
 		EE_coord_z = EE_link.GetTransform()[2][3]
+		#EE_link = self.robot.GetLinks()[7]
+		#EE_coord_z = EE_link.GetTransform()[2][3]
+		#plotSphere(self.env, self.bodies, [EE_link.GetTransform()[0][3], EE_link.GetTransform()[1][3], EE_link.GetTransform()[2][3]])
 		if EE_coord_z > 0:
 			EE_coord_z = 0
 		return -EE_coord_z
@@ -401,17 +409,6 @@ class Planner(object):
 		EE_link = self.robot.GetLinks()[7]
 		return EE_link.GetTransform()[:2,:3].dot([1,0,0])
 
-		"""
-		tf = EE_link.GetTransform()[:3,:3]
-
-		r_x = abs(tf[1][1])+abs(tf[2][1]) #+abs(tf[0][1]) 
-		r_y = abs(tf[0][2])+abs(tf[2][2]) #+abs(tf[1][2])
-		r_z = abs(tf[0][0])+abs(tf[1][0]) #+abs(tf[2][0])
-
-		coffee_feature = r_z
-
-		return coffee_feature
-		"""
 		
 	def coffee_constraint_derivative(self, waypt):
 		"""
@@ -442,7 +439,7 @@ class Planner(object):
 		print "I'm in trajopt_PLANNER trajopt pose!"		
 
 		# plot goal point
-		#plotSphere(self.env, self.bodies, goal_pose, size=20)
+		#plotSphere(self.env, self.bodies, goal_pose, size=40)
 	
 		if len(start) < 10:
 			aug_start = np.append(start.reshape(7), np.array([0,0,0]), 1)
@@ -475,7 +472,7 @@ class Planner(object):
 						    "wxyz" : quat_target, 
 						    "link": "j2s7s300_link_7",
 							"rot_coeffs" : [0,0,0],
-							"pos_coeffs" : [100,100,100],
+							"pos_coeffs" : [15,15,15],
 						    }
 			}
 			],
@@ -503,7 +500,7 @@ class Planner(object):
 
 		# plot resulting trajectory
 		#plotTraj(self.env,self.robot,self.bodies,self.waypts_plan, size=10,color=[0, 0, 1])
-		plotCupTraj(self.env,self.robot,self.bodies,self.waypts_plan,color=[0,1,0])		
+		plotCupTraj(self.env,self.robot,self.bodies,self.waypts_plan, color=[0,1,0])		
 		#time.sleep(10)
 
 		print "I'm done with trajopt pose!"
@@ -632,21 +629,23 @@ class Planner(object):
 			self.curr_features = Phi
 
 			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
-			update_gains = [2.0, 2.0, 10.0]
+			update_gains = [10.0, 2.0, 100.0]
 
 			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
 			max_weights = [1.0, 1.0, 10.0] 
 
 			update = Phi_p - Phi
-			print "Phi prev: " + str(Phi_p)
-			print "Phi curr: " + str(Phi)
-			print "Phi_p - Phi = " + str(update)
+			#print "Phi prev: " + str(Phi_p)
+			#print "Phi curr: " + str(Phi)
+			#print "Phi_p - Phi = " + str(update)
 				
 			if self.featMethod == ALL:
 				# update all weights 
+				print "updating all weights"
 				curr_weight = [self.weights[0] - update_gains[0]*update[1], self.weights[1] - update_gains[1]*update[2], self.weights[2] - update_gains[2]*update[3]]	
 	
 			elif self.featMethod == MAX:
+				print "updating max weight"
 				change_in_features = [update[1]/CUP_RANGE, update[2]/TABLE_RANGE, update[3]/LAPTOP_RANGE]
 
 				# get index of maximal change
@@ -656,14 +655,14 @@ class Planner(object):
 				curr_weight = [self.weights[i] for i in range(len(self.weights))]
 				curr_weight[max_idx] = curr_weight[max_idx] - update_gains[max_idx]*update[max_idx+1]
 
-			print "curr_weight after = " + str(curr_weight)
+			#print "curr_weight after = " + str(curr_weight)
 
 			# clip values at max and min allowed weights
 			for i in range(3):
 				curr_weight[i] = np.clip(curr_weight[i], -max_weights[i], max_weights[i])
 
-			print "here are the old weights:", self.weights
-			print "here are the new weights:", curr_weight
+			#print "here are the old weights:", self.weights
+			#print "here are the new weights:", curr_weight
 
 			self.weights = curr_weight
 			return self.weights
@@ -704,9 +703,13 @@ class Planner(object):
 		self.weights = weights
 		
 		# TODO THIS IS EXPERIMENTAL
-		#place_pose = [-0.46513, 0.29041, 0.69497]
-		#self.trajOptPose(start, goal, place_pose)
-		self.trajOpt(start, goal, traj_seed=seed)
+		place_pose = [-0.46513, 0.29041, 0.69497]
+		#place_pose = [-0.58218719293246346, 0.33018986140289219, 0.10592141379295332]
+		#plotSphere(self.env,self.bodies,place_pose,size=20,color=[0,0,1])
+		if self.numFeat == ONE_FEAT:
+			self.trajOpt(start, goal, traj_seed=seed)
+		elif self.numFeat == TWO_FEAT: 
+			self.trajOptPose(start, goal, place_pose)
 		
 		#print "waypts_plan after trajopt: " + str(self.waypts_plan)
 		self.upsample(step_time)
@@ -832,11 +835,26 @@ if __name__ == '__main__':
 	start = np.array(pick)*(math.pi/180.0)
 	goal = np.array(place)*(math.pi/180.0)
 
-	weights = [1.0, 0.0, 0.0]
+	weights = [0.0, 0.0, 0.0]
 	T = 25.0
 
-	planner = Planner(2, False)
-	planner.replan(start, goal, weights, 0.0, T, 0.5)	
+	featMethod = "ALL"
+	numFeat = 1
+	planner = Planner(2, False, featMethod, numFeat)
+	
+	if len(goal) < 10:
+		waypt = np.append(goal.reshape(7), np.array([0,0,0]), 1)
+		waypt[2] += math.pi
+	planner.robot.SetDOFValues(waypt)
+	coords = robotToCartesian(planner.robot)
+	place_pose = [coords[6][0], coords[6][1], coords[6][2]]
+	print place_pose
+	plotSphere(planner.env,planner.bodies,place_pose,0.4)
+
+	#place_pose = [-0.46513, 0.29041, 0.69497]
+
+
+	#planner.replan(start, goal, weights, 0.0, T, 0.5)	
 	time.sleep(20)
 
 

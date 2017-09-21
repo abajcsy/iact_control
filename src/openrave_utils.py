@@ -159,7 +159,7 @@ def plotSphere(env, bodies, coords, size=10, color=[0, 0, 1]):
 	"""
 	Plots a single sphere in OpenRAVE center at coords(x,y,z) location
 	"""
-	bodies.append(env.plot3(points=np.array((coords[0],coords[1],coords[2])), pointsize=10, colors=np.array(((color[0],color[1],color[2])))))
+	bodies.append(env.plot3(points=np.array((coords[0],coords[1],coords[2])), pointsize=size, colors=np.array(((color[0],color[1],color[2])))))
 
 def plotTable(env):
 	"""
@@ -237,7 +237,7 @@ def plotTableMount(env,bodies):
 	body.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(color)
 	bodies.append(body)
 
-def plotLaptop(env,bodies):
+def plotLaptop(env,bodies,pos):
 	"""
 	Plots the robot table mount in OpenRAVE.
 	"""
@@ -247,10 +247,14 @@ def plotLaptop(env,bodies):
 	# divide by 2: 0.1524 x 0.1143 x 0.0127
 	#20 in from robot base
 	body.InitFromBoxes(np.array([[0,0,0,0.1143,0.1524,0.0127]]))
-	body.SetTransform(np.array([[1.0, 0.0,  0.0, (-1.3858/2 - 0.1)],
-			                     [0.0, 1.0,  0.0, 0],
-			                     [0.0, 0.0,  1.0, -0.1016],
+	body.SetTransform(np.array([[1.0, 0.0,  0.0, pos[0]],
+			                     [0.0, 1.0,  0.0, pos[1]+0.1],
+			                     [0.0, 0.0,  1.0, pos[2]-0.1016],
 			                     [0.0, 0.0,  0.0, 1.0]]))
+#	body.SetTransform(np.array([[1.0, 0.0,  0.0, (-1.3858/2 - 0.1)],
+#			                     [0.0, 1.0,  0.0, 0],
+#			                     [0.0, 0.0,  1.0, -0.1016],
+#			                     [0.0, 0.0,  0.0, 1.0]]))
 	body.SetName("laptop")
 	env.Add(body, True)
 	color = np.array([0, 0, 0])

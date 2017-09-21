@@ -39,9 +39,9 @@ prefix = 'j2s7s300_driver'
 home_pos = [103.366,197.13,180.070,43.4309,265.11,257.271,287.9276]
 candlestick_pos = [180.0]*7
 
-pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] #310.8]
+pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
 pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
-place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0] 
+place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
 place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
 pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] #200.0]
@@ -61,9 +61,12 @@ LAPTOP_TASK = 3
 ZERO_FEEDBACK = 'A'
 HAPTIC_FEEDBACK = 'B'
 
-ALL = 0 						# updates all features
-MAX = 1							# updates only feature that changed the most
-LIKELY = 2						# updates the most likely feature 
+ONE_FEAT = 1					# experiment where human has to correct only one feature (out of three)
+TWO_FEAT = 2					# experiment where human has to correc two features
+
+ALL = "ALL" 							# updates all features
+MAX = "MAX"								# updates only feature that changed the most
+LIKELY = "LIKELY"						# updates the most likely feature 
 
 class PIDVelJaco(object): 
 	"""
@@ -90,7 +93,7 @@ class PIDVelJaco(object):
 		sim_flag 				  - flag for if in simulation or not
 	"""
 
-	def __init__(self, ID, task, methodType, demo, record, featMethod):
+	def __init__(self, ID, task, methodType, demo, record, featMethod, numFeat):
 		"""
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
@@ -103,6 +106,8 @@ class PIDVelJaco(object):
 
 		# can be ALL, MAX, or LIKELY
 		self.featMethod = featMethod
+		# can be ONE_FEAT or TWO_FEAT
+		self.numFeat = numFeat
 
 		# optimal demo mode
 		if demo == "F" or demo == "f":
@@ -135,7 +140,7 @@ class PIDVelJaco(object):
 		# ---- Trajectory Setup ---- #
 
 		# total time for trajectory
-		self.T = 25.0 	#TODO THIS IS EXPERIMENTAL - used to be 15.0
+		self.T = 20.0 	#TODO THIS IS EXPERIMENTAL - used to be 15.0
 
 		# initialize trajectory weights
 
@@ -153,7 +158,12 @@ class PIDVelJaco(object):
 		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
 			pick = pick_shelf
 		else:
-			pick = pick_basic #pick_basic_EEtilt
+			if self.numFeat == TWO_FEAT:
+				# if two features are wrong, initialize the starting config badly (tilted cup)
+				pick = pick_basic
+				pick[-1] = 200.0
+			else:
+				pick = pick_basic 
 
 		if self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
 			place = place_higher
@@ -173,7 +183,7 @@ class PIDVelJaco(object):
 		# create the trajopt planner and plan from start to goal
 
 		# TODO THIS IS EXPERIMENTAL
-		self.planner = trajopt_planner.Planner(self.task, self.demo, self.featMethod)
+		self.planner = trajopt_planner.Planner(self.task, self.demo, self.featMethod, self.numFeat)
 		#self.planner = planner.Planner(self.task, self.demo, self.featMethod)
 		
 		# stores the current trajectory we are tracking, produced by planner
@@ -262,11 +272,11 @@ class PIDVelJaco(object):
 		# save experimental data (only if experiment started)
 		if self.record and self.reached_start:
 			print "Saving experimental data to file..."
-			weights_filename = "weights" + str(ID) + str(task) + methodType
-			force_filename = "force" + str(ID) + str(task) + methodType		
-			tracked_filename = "tracked" + str(ID) + str(task) + methodType
-			original_filename = "original" + str(ID) + str(task) + methodType
-			deformed_filename = "deformed" + str(ID) + str(task) + methodType		
+			weights_filename = "weights" + str(ID) + str(numFeat) + featMethod
+			force_filename = "force" + str(ID) + str(numFeat) + featMethod		
+			tracked_filename = "tracked" + str(ID) + str(numFeat) + featMethod
+			original_filename = "original" + str(ID) + str(numFeat) + featMethod
+			deformed_filename = "deformed" + str(ID) + str(numFeat) + featMethod		
 			self.expUtil.save_tauH(force_filename)	
 			self.expUtil.save_tracked_traj(tracked_filename)
 			self.expUtil.save_original_traj(original_filename)
@@ -343,6 +353,7 @@ class PIDVelJaco(object):
 				self.no_interaction_count += 1
 
 
+		"""
 		if self.methodType == ZERO_FEEDBACK:
 			if self.interaction_count > 0 and not self.gravity_comp_mode:
 				self.controller.set_gains(0.0*self.P,0.0*self.I,0.0*self.D, 0, 0)
@@ -352,7 +363,7 @@ class PIDVelJaco(object):
 				self.controller.set_gains(self.P,self.I,self.D, 0, 0)
 				self.gravity_comp_mode = False
 				print "stopping gravity compensation mode..."
-
+		"""
 
 		if self.path_start_T is not None:
 			# for tracing weight updates
@@ -529,16 +540,17 @@ class PIDVelJaco(object):
 				self.expUtil.set_endT(time.time())
 
 if __name__ == '__main__':
-	if len(sys.argv) < 7:
-		print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, featMethod"
-	else:	
-		ID = int(sys.argv[1])
-		task = int(sys.argv[2])
-		methodType = sys.argv[3]
-		demo = sys.argv[4]
-		record = sys.argv[5]
-		featMethod = int(sys.argv[6])
+	#if len(sys.argv) < 7:
+	#	print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, featMethod, numFeat"
+	#else:	
+	ID = int(sys.argv[1])
+	task = 2 #int(sys.argv[2])
+	methodType = 'B' #sys.argv[3]
+	demo = sys.argv[4]
+	record = sys.argv[5]
+	featMethod = sys.argv[6]
+	numFeat = int(sys.argv[7])
 
-		PIDVelJaco(ID,task,methodType,demo,record, featMethod)
+	PIDVelJaco(ID,task,methodType,demo,record,featMethod,numFeat)
 
 
