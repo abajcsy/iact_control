@@ -112,7 +112,7 @@ class Planner(object):
 		plotLaptop(self.env,self.bodies,OBS_CENTER)
 		plotCabinet(self.env)
 		#plotSphere(self.env,self.bodies,OBS_CENTER,0.4)
-		#plotSphere(self.env,self.bodies,HUMAN_CENTER,0.4)
+		plotSphere(self.env,self.bodies,HUMAN_CENTER,1)
 	
 		# ---- DEFORMATION Initialization ---- #
 
@@ -374,7 +374,7 @@ class Planner(object):
 		prev_waypt = waypt[0:7]
 		curr_waypt = waypt[7:14]
 		feature = self.human_features(curr_waypt,prev_waypt)
-		return feature*self.weights*np.linalg.norm(curr_waypt - prev_waypt)
+		return feature*self.weights[2]*np.linalg.norm(curr_waypt - prev_waypt)				#TODO BEWARE OF THE WEIGHT INDEX - IS IT RIGHT FOR YOUR APPLICATION?
 
 
 	# ---- custom constraints --- #
@@ -490,6 +490,8 @@ class Planner(object):
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
 
+			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)		
+
 		for t in range(1,self.num_waypts_plan - 1):
 			prob.AddConstraint(self.table_constraint, [(t,j) for j in range(7)], "INEQ", "table%i"%t)
 			#prob.AddConstraint(self.coffee_constraint, [(t,j) for j in range(7)], "INEQ", "coffee%i"%t)
@@ -568,6 +570,11 @@ class Planner(object):
 			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+
+
+			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)			
+
+
 			#elif self.task == HUMAN_TASK:
 			#	prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
 			#prob.AddErrorCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "HINGE", "laptop%i"%t)
@@ -629,10 +636,10 @@ class Planner(object):
 			self.curr_features = Phi
 
 			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
-			update_gains = [10.0, 2.0, 100.0]
+			update_gains = [100.0, 2.0, 100.0]
 
 			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
-			max_weights = [1.0, 1.0, 10.0] 
+			max_weights = [10.0, 1.0, 10.0] 
 
 			update = Phi_p - Phi
 			#print "Phi prev: " + str(Phi_p)
@@ -823,25 +830,30 @@ if __name__ == '__main__':
 	pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
 	place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
 
-	pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] #200.0]
+	# for cup/human task:
+	pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
+	place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]	
+
+	pick_basic_EEtilt = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 200.0] 
 	place_lower_EEtilt = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 400.0]
 
 	#place_pose = [-0.58218719,  0.33018986,  0.10592141] # x, y, z for pick_lower_EEtilt
 
 	# initialize start/goal based on task 
-	pick = pick_basic_EEtilt
-	place = place_lower 
+	pick = pick_shelf #pick_basic_EEtilt
+	place = place_lower #place_lower 
 
 	start = np.array(pick)*(math.pi/180.0)
 	goal = np.array(place)*(math.pi/180.0)
 
-	weights = [0.0, 0.0, 0.0]
-	T = 25.0
+	weights = [10.0, 0.0, 10.0]
+	T = 20.0
 
 	featMethod = "ALL"
-	numFeat = 1
+	numFeat = 2
 	planner = Planner(2, False, featMethod, numFeat)
 	
+	"""
 	if len(goal) < 10:
 		waypt = np.append(goal.reshape(7), np.array([0,0,0]), 1)
 		waypt[2] += math.pi
@@ -850,11 +862,11 @@ if __name__ == '__main__':
 	place_pose = [coords[6][0], coords[6][1], coords[6][2]]
 	print place_pose
 	plotSphere(planner.env,planner.bodies,place_pose,0.4)
+	"""
 
 	#place_pose = [-0.46513, 0.29041, 0.69497]
 
-
-	#planner.replan(start, goal, weights, 0.0, T, 0.5)	
+	planner.replan(start, goal, weights, 0.0, T, 0.5)	
 	time.sleep(20)
 
 
