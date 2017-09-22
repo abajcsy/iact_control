@@ -38,7 +38,6 @@ COFFEE_TASK = 1
 TABLE_TASK = 2
 LAPTOP_TASK = 3
 
-#OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 OBS_CENTER = [-1.3858/2.0 - 0.1, -0.1, 0.0]
 HUMAN_CENTER = [0.0, 0.2, 0.0]
 
@@ -49,6 +48,13 @@ LIKELY = "LIKELY"						# updates the most likely feature
 
 ONE_FEAT = 1					# experiment where human has to correct only one feature (out of three)
 TWO_FEAT = 2					# experiment where human has to correc two features
+
+
+goodTable_badCup = np.array([[ 1.81863308, 2.64591915, 3.20791517,  1.77674518,  3.91302818,  3.78561915, 5.42448332], 
+					[ 2.56066528,  2.03835773,  3.00033969,  1.67359358,  3.58466093,  3.98627262, 5.11606871],
+					[ 3.10702714,  1.79412127,  3.01387114,  1.7145336,   3.6649984,   4.12058457, 5.19839698],
+					[ 3.67915406,  1.77325452,  3.35103216, 2.00189265,  3.8781216,   4.29525529, 5.61996019]])
+
 
 class Planner(object):
 	"""
@@ -183,6 +189,39 @@ class Planner(object):
 		"""
 		#mywaypts = np.reshape(waypts,(7,self.num_waypts_plan)).T
 		return self.velocity_features(mywaypts)
+
+
+	# -- Distance to Robot Base (origin of world) -- #
+
+	def origin_features(self, waypt):
+		"""
+		Computes the total cost over waypoints based on 
+		y-axis distance to table
+		---
+		input trajectory, output scalar feature
+		"""
+		if len(waypt) < 10:
+			waypt = np.append(waypt.reshape(7), np.array([0,0,0]), 1)
+			waypt[2] += math.pi
+		self.robot.SetDOFValues(waypt)
+		coords = robotToCartesian(self.robot)
+		EEcoord_y = coords[6][1]
+		EEcoord_y = np.linalg.norm(coords[6])
+		#plotSphere(self.env, self.bodies, [coords[6][0],0,0], size=20, color=[1,0,0])
+		#plotSphere(self.env, self.bodies, [0,coords[6][1],0], size=20, color=[0,0,1])
+		#plotSphere(self.env, self.bodies, [0,0,coords[6][2]], size=20, color=[0,1,0])
+		#plotSphere(self.env, self.bodies, coords[6][0:3], size=20, color=[1,1,0])
+		print "EEcoord_y: " + str(EEcoord_y)
+		return EEcoord_y
+	
+	def origin_cost(self, waypt):
+		"""
+		Computes the total distance from EE to base of robot cost.
+		---
+		input trajectory, output scalar cost
+		"""
+		feature = self.origin_features(waypt)
+		return feature*self.weights[2]										# TODO CHECK IF THIS IS THE RIGHT WEIGHT INDEXING FOR YOUR APPLICATION?
 
 	# -- Distance to Table -- #
 
@@ -489,7 +528,7 @@ class Planner(object):
 			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
-
+			#prob.AddCost(self.origin_cost, [(t,j) for j in range(7)], "origin%i"%t)
 			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)		
 
 		for t in range(1,self.num_waypts_plan - 1):
@@ -539,6 +578,11 @@ class Planner(object):
 			init_waypts = traj_seed #traj_seed.waypts_plan
 			print init_waypts
 		
+
+		if self.weights[0] == -1 and self.weights[1] == 1:
+			print "using goodTable_badCup seed!"
+			init_waypts = goodTable_badCup
+
 		request = {
 			"basic_info": {
 				"n_steps": self.num_waypts_plan,
@@ -570,6 +614,8 @@ class Planner(object):
 			prob.AddCost(self.coffee_cost, [(t,j) for j in range(7)], "coffee%i"%t)
 			prob.AddCost(self.table_cost, [(t,j) for j in range(7)], "table%i"%t)
 			prob.AddCost(self.laptop_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "laptop%i"%t)
+			#prob.AddCost(self.origin_cost, [(t,j) for j in range(7)], "origin%i"%t)
+
 			#prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)	
 			#elif self.task == HUMAN_TASK:
 			#	prob.AddCost(self.human_cost, [(t-1,j) for j in range(7)]+[(t,j) for j in range(7)], "human%i"%t)
@@ -634,10 +680,21 @@ class Planner(object):
 			self.curr_features = Phi
 
 			# [update_gain_coffee, update_gain_table, update_gain_laptop] 
-			update_gains = [100.0, 2.0, 100.0]
+			if self.numFeat == ONE_FEAT:
+				update_gains = [2.0, 2.0, 100.0]
+				max_weights = [1.0, 1.0, 10.0] 
 
-			# [max_weight_coffee, max_weight_table, max_weight_laptop] 
-			max_weights = [10.0, 1.0, 10.0] 
+				# [max_weight_coffee, max_weight_table, max_weight_laptop] 
+				#update_gains = [50.0, 2.0, 100.0]
+				#max_weights = [5.0, 1.0, 10.0] 
+
+			elif self.numFeat == TWO_FEAT:
+				# [max_weight_coffee, max_weight_table, max_weight_laptop] 
+				#update_gains = [50.0, 2.0, 100.0]
+				#max_weights = [5.0, 1.0, 10.0] 
+
+				update_gains = [2.0, 2.0, 100.0]
+				max_weights = [1.0, 1.0, 10.0] 
 
 			update = Phi_p - Phi
 			#print "Phi prev: " + str(Phi_p)
@@ -838,17 +895,17 @@ if __name__ == '__main__':
 	#place_pose = [-0.58218719,  0.33018986,  0.10592141] # x, y, z for pick_lower_EEtilt
 
 	# initialize start/goal based on task 
-	pick = pick_shelf #pick_basic_EEtilt
+	pick = pick_basic #pick_basic_EEtilt
 	place = place_lower #place_lower 
 
 	start = np.array(pick)*(math.pi/180.0)
 	goal = np.array(place)*(math.pi/180.0)
 
-	weights = [10.0, 0.0, 10.0]
+	weights = [0.0, 0.0, 0.0]
 	T = 20.0
 
 	featMethod = "ALL"
-	numFeat = 2
+	numFeat = 1
 	planner = Planner(2, False, featMethod, numFeat)
 	
 	"""
@@ -864,7 +921,16 @@ if __name__ == '__main__':
 
 	#place_pose = [-0.46513, 0.29041, 0.69497]
 
-	planner.replan(start, goal, weights, 0.0, T, 0.5)	
+	traj = planner.replan(start, goal, weights, 0.0, T, 0.5)	
+
+	weights = [0.0, 1.0, 0.0]
+
+	traj = planner.replan(start, goal, weights, 0.0, T, 0.5)	
+
+	weights = [-1.0, 1.0, 0.0]
+
+	traj = planner.replan(start, goal, weights, 0.0, T, 0.5)	
+
 	time.sleep(20)
 
 
