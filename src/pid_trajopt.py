@@ -51,10 +51,13 @@ epsilon = 0.10							# epislon for when robot think it's at goal
 MAX_CMD_TORQUE = 40.0					# max command robot can send
 INTERACTION_TORQUE_THRESHOLD = 8.0		# threshold when interaction is measured 
 
-HUMAN_TASK = 0
-COFFEE_TASK = 1 
-TABLE_TASK = 2
-LAPTOP_TASK = 3
+#HUMAN_TASK = 0
+#COFFEE_TASK = 1 
+#TABLE_TASK = 2
+#LAPTOP_TASK = 3
+
+FAM_TASK = 1
+EXP_TASK = 2
 
 ZERO_FEEDBACK = 'A'
 HAPTIC_FEEDBACK = 'B'
@@ -96,14 +99,18 @@ class PIDVelJaco(object):
 		Setup of the ROS node. Publishing computed torques happens at 100Hz.
 		"""
 
-		# task type - table, laptop, or coffee task
-		self.task = task
+		# task type - experimental (table) or familiarization (cup)
+		if task == "FAM" or task == "fam":
+			self.task = FAM_TASK
+		elif task == "EXP" or task == "exp":
+			self.task = EXP_TASK
 
 		# method type - A=IMPEDANCE, B=LEARNING
 		self.methodType = methodType
 
 		# can be ALL, MAX, or LIKELY
 		self.featMethod = featMethod
+
 		# can be ONE_FEAT or TWO_FEAT
 		self.numFeat = numFeat
 
@@ -143,17 +150,20 @@ class PIDVelJaco(object):
 		# initialize trajectory weights
 
 		# TODO THIS IS EXPERIMENTAL - CHANGE BACK TO ALL 0
-		self.weights = [0.0, 0.0, 0.0]
+		self.weights = [0.0, 0.0] 
 
 		# if in demo mode, then set the weights to be optimal
-#		if self.demo:
-#			if self.task == TABLE_TASK or self.task == COFFEE_TASK:
-#				self.weights = 1
-#			elif self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
-#				self.weights = 10
+		if self.demo:
+			if self.task == FAM_TASK:
+				self.weights = [1.0,0.0]
+			elif self.task == EXP_TASK:
+				if self.numFeat == ONE_FEAT:
+					self.weights = [0.0,1.0]
+				elif self.numFeat == TWO_FEAT:
+					self.weights = [1.0,1.0]
 
 		# initialize start/goal based on task 
-		if self.task == COFFEE_TASK or self.task == HUMAN_TASK:
+		if self.task == FAM_TASK:
 			pick = pick_shelf
 		else:
 			if self.numFeat == TWO_FEAT:
@@ -163,7 +173,7 @@ class PIDVelJaco(object):
 			else:
 				pick = pick_basic 
 
-		if self.task == LAPTOP_TASK or self.task == HUMAN_TASK:
+		if self.task == FAM_TASK:
 			place = place_higher
 		else:
 			place = place_lower
@@ -429,7 +439,7 @@ class PIDVelJaco(object):
 
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
-				#self.expUtil.update_weights(timestamp, self.weights)
+				self.expUtil.update_weights(timestamp, self.weights)
 
 				# store deformed trajectory
 				# TODO THIS IS EXPERIMENTAL
@@ -542,7 +552,7 @@ if __name__ == '__main__':
 	#	print "ERROR: Not enough arguments. Specify ID, task, methodType, demo, record, featMethod, numFeat"
 	#else:	
 	ID = int(sys.argv[1])
-	task = 2 #int(sys.argv[2])
+	task = sys.argv[2]
 	methodType = 'B' #sys.argv[3]
 	demo = sys.argv[4]
 	record = sys.argv[5]

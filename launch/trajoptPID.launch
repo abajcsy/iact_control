@@ -3,8 +3,8 @@
 	<!-- Participant ID -->
 	<arg name="ID" default="0"/>
 
-	<!-- Experimental task (0,1,2,3) -->
-	<arg name="task" default="2"/> 
+	<!-- Experimental task (FAM - familiarization, EXP - experimental)-->
+	<arg name="task" default="EXP"/> 
 
 	<!-- Method type ('A'- impedance, 'B'- learning, 'C'- demonstration) -->
 	<arg name="methodType" default="A"/>

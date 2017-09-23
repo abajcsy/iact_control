@@ -40,7 +40,7 @@ class ExperimentUtils(object):
 		self.endT = 0.0
 
 		# stores weights over time 
-		# always in the form [timestamp, weight]
+		# always in the form [timestamp, weight1, weight2, weight3]
 		self.weights = None
 
 		# stores running list of forces applied by human
@@ -85,7 +85,7 @@ class ExperimentUtils(object):
 		"""
 		Updates list of timestamped weights
 		"""
-		new_w = np.array([timestamp, new_weight])
+		new_w = np.array([timestamp, new_weight[0], new_weight[1]])
 		if self.weights is None:
 			self.weights = np.array([new_w])
 		else:
@@ -872,9 +872,13 @@ class ExperimentUtils(object):
 			for i in range(len(self.weights[:,0])):
 				out.write(',%f' % self.weights[i][0])		
 			out.write('\n')					
-			out.write('weights')
+			out.write('weights1')
 			for i in range(len(self.weights[:,1])):
 				out.write(',%f' % self.weights[i][1])
+			out.write('\n')	
+			out.write('weights2')
+			for i in range(len(self.weights[:,2])):
+				out.write(',%f' % self.weights[i][2])
 			out.write('\n')
 		out.close()
 
