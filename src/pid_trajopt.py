@@ -280,11 +280,16 @@ class PIDVelJaco(object):
 		# save experimental data (only if experiment started)
 		if self.record and self.reached_start:
 			print "Saving experimental data to file..."
-			weights_filename = "weights" + str(ID) + str(numFeat) + featMethod
-			force_filename = "force" + str(ID) + str(numFeat) + featMethod		
-			tracked_filename = "tracked" + str(ID) + str(numFeat) + featMethod
-			original_filename = "original" + str(ID) + str(numFeat) + featMethod
-			deformed_filename = "deformed" + str(ID) + str(numFeat) + featMethod		
+			if featMethod == ALL:
+				method = "A"
+			elif featMethod == MAX:
+				method = "B"
+				
+			weights_filename = "weights" + str(ID) + str(numFeat) + method
+			force_filename = "force" + str(ID) + str(numFeat) + method		
+			tracked_filename = "tracked" + str(ID) + str(numFeat) + method
+			original_filename = "original" + str(ID) + str(numFeat) + method
+			deformed_filename = "deformed" + str(ID) + str(numFeat) + method		
 			self.expUtil.save_tauH(force_filename)	
 			self.expUtil.save_tracked_traj(tracked_filename)
 			self.expUtil.save_original_traj(original_filename)

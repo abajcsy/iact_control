@@ -91,8 +91,8 @@ class Planner(object):
 		self.step_time_plan = None
 
 		# this is the cache of trajectories computed for all max/min weights
-		self.traj_cache_1feat = pickle.load( open( "/home/anca/catkin_ws/src/iact_control/src/traj_cache_1feat.p", "rb" ) )
-		self.traj_cache_2feat = pickle.load( open( "/home/anca/catkin_ws/src/iact_control/src/traj_cache_2feat.p", "rb" ) )	
+		self.traj_cache_1feat = pickle.load( open( "/home/abajcsy/catkin_ws/src/iact_control/src/traj_cache_1feat.p", "rb" ) )
+		self.traj_cache_2feat = pickle.load( open( "/home/abajcsy/catkin_ws/src/iact_control/src/traj_cache_2feat.p", "rb" ) )	
 
 		# these variables are for the upsampled trajectory
 		self.waypts = None
@@ -795,7 +795,7 @@ class Planner(object):
 		self.final_time = final_time
 		self.curr_waypt_idx = 0
 		self.weights = weights
-		
+		print "weights in replan: " + str(weights)
 		# TODO THIS IS EXPERIMENTAL
 		
 		#place_pose = [-0.58218719293246346, 0.33018986140289219, 0.10592141379295332]

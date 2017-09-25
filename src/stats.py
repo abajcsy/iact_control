@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import scipy
 import math
-
+import pickle
 import logging
 import copy
 
@@ -24,14 +24,20 @@ from trajopt_planner import *
 
 from scipy import stats
 
-pick_table = [104.2,151.6,183.8,101.8,224.2,216.9,310.8]
+pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
 pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
 place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
-place_higher = [233.0,132.4,200.5,137.8,248.7,243.2,264.8]
+place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 
-COFFEE_TASK = 1
-TABLE_TASK = 2
-LAPTOP_TASK = 3
+ONE_FEAT = 1					# experiment where human has to correct only one feature (out of three)
+TWO_FEAT = 2					# experiment where human has to correc two features
+
+ALL = "ALL" 							# updates all features
+MAX = "MAX"								# updates only feature that changed the most
+LIKELY = "LIKELY"						# updates the most likely feature 
+
+FAM_TASK = 1
+EXP_TASK = 2
 
 def compute_effort(data):
 	"""
@@ -78,58 +84,59 @@ def compute_reward(data, planner):
 	return (Rvel, Rfeat)
 
 def compute_optimalReward(task, precomputed=True):
+
+	#TODO THIS WHOLE FUNCTION NEEDS TO BE CHANGED 
+
 	"""
 	Compute the optimal feature values for given task.
 	Precomputed=True means it uses old values, set to False if want to recompute.
 	"""
 
 	if precomputed:
-		if task == 1: 
-			return (0.10292734749900004, 37.699161124896193)
-		elif task == 2:
-			return (0.029572791376999984, 37.420166769225823)
-		elif task == 3:
-			return (0.040048660123999998, 10.354323653427837)
+		if task == ONE_FEAT: # one feature task
+			return (1.6849658205633371, 1.030981635333591, 0.39520399865015937)  #return (0.10292734749900004, 37.699161124896193)
+		elif task == TWO_FEAT: # two feature task
+			return (3.4797942681227552, 1.1488477888843827, 0.6889346436935464)  # return (0.029572791376999984, 37.420166769225823)
 	else:
-		T = 15.0
-		weights = 0
-		if task == TABLE_TASK or task == COFFEE_TASK:
-			weights = 1
-		elif task == LAPTOP_TASK:
-			weights = 10
+		T = 20.0
+		weights = [0.0,0.0]
+		if task == ONE_FEAT:
+			weights[0] = [0.0,1.0]
+		elif task == TWO_FEAT:
+			weights = [1.0,1.0]
 
-		# initialize start/goal based on task
-		if task == COFFEE_TASK or task == HUMAN_TASK:
-			pick = pick_shelf
-			place = place_lower
+		if task == TWO_FEAT:
+			# if two features are wrong, initialize the starting config badly (tilted cup)
+			pick = pick_basic
+			pick[-1] = 200.0
 		else:
-			pick = pick_table
-			place = place_higher
-		
+			pick = pick_basic 
+		place = place_lower
+
 		startRad = np.array(pick)*(math.pi/180.0)
 		goalRad = np.array(place)*(math.pi/180.0)
 		start = startRad
 		goal = goalRad
 	
 		filename = None
-		if task == 1:
-			filename = "task1.csv"
-		elif task == 2:
-			filename = "task2.csv"
-		elif task == 3:
-			filename = "task3.csv"
+		if task == ONE_FEAT:
+			filename = "/home/abajcsy/catkin_ws/src/iact_control/src/task1_opt.p"
+		elif task == TWO_FEAT:
+			filename = "/home/abajcsy/catkin_ws/src/iact_control/src/task2_opt.p"
 		
+		pickle.load( open( filename, "rb" ) )
 		# get optimal waypts from file
-		waypts = get_opt_waypts(filename)
+		#waypts = get_opt_waypts(filename)
 
 		print "computing optimal reward"
-		plan = Planner(task, demo=False)
+		plan = Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=task)
 		r = plan.featurize(waypts)
 		Rvel = r[0]
-		Rfeat = np.sum(r[1])
-		print Rvel, Rfeat
+		Rfeat1 = np.sum(r[1])
+		Rfeat2 = np.sum(r[2])
+		print Rvel, Rfeat1, Rfeat2
 		plan.kill_planner()
-		return (Rvel, Rfeat)
+		return (Rvel, Rfeat1, Rfeat2)
 
 def get_opt_waypts(filename):
 	"""
@@ -157,39 +164,44 @@ def get_opt_waypts(filename):
 		waypts = data
 	return waypts[1:8].T
 
-def get_opt_plan(task):
+def save_opt_waypts(task):
 	"""
-	Computes the optimal plan given a task
+	Computes the optimal waypoints given a task and pickles file
 	"""
-	print "in get opt plan"
-	T = 15.0
-	weights = 0
-	if task == TABLE_TASK or task == COFFEE_TASK:
-		weights = 1
-	elif task == LAPTOP_TASK:
-		weights = 10
+	T = 20.0
+	weights = [0.0,0.0]
+	if task == ONE_FEAT:
+		weights = [0.0,1.0]
+	elif task == TWO_FEAT:
+		weights = [1.0,1.0]
 
-	# initialize start/goal based on task 
-	if task == COFFEE_TASK or task == HUMAN_TASK:
-		pick = pick_shelf
-	else:
+	if task == TWO_FEAT:
+		# if two features are wrong, initialize the starting config badly (tilted cup)
 		pick = pick_basic
-
-	if task == LAPTOP_TASK:
-		place = place_higher
+		pick[-1] = 200.0
 	else:
-		place = place_lower
-		
+		pick = pick_basic 
+	place = place_lower
+
 	startRad = np.array(pick)*(math.pi/180.0)
 	goalRad = np.array(place)*(math.pi/180.0)
 	start = startRad
 	goal = goalRad
 
-	plan = Planner(task, demo=False)	
-	plan.replan(start, goal, weights, 0.0, T, 0.1)
-	print "in get opt plan"
+	plan = Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=task)	
+	print "made planner"
+	print weights
+	traj = plan.replan(start, goal, weights, 0.0, T, 0.5, seed=None)
+	print traj	
+	filename = "task" + str(task) + "_opt.p"
+	pickle.dump(traj, open( filename, "wb" ) )
+	r = plan.featurize(traj)
+	Rvel = r[0]
+	Rfeat1 = np.sum(r[1])
+	Rfeat2 = np.sum(r[2])
+	print Rvel, Rfeat1, Rfeat2
 	plan.kill_planner()
-	return plan
+	return (Rvel, Rfeat1, Rfeat2)
 
 def compute_obj_metrics():
 	"""
@@ -238,11 +250,10 @@ def compute_obj_metrics():
 		for task in trackedData[ID]:
 			if task != 0:
 				# compute optimal reward
-				(Rvel_opt, Rfeat_opt) = compute_optimalReward(task, precomputed=True)
-				plan = Planner(task, demo=False)	
+				(Rvel_opt, Rfeat_opt) = compute_optimalReward(task, precomputed=True)	
 				for trial in trackedData[ID][task]:
 					for method in trackedData[ID][task][trial]:
-
+						plan = Planner(EXP_TASK, demo=False, featMethod=method, numFeat=task)
 						# --- Compute Reward ---#
 						data = trackedData[ID][task][trial][method]
 						(Rvel,Rfeat) = compute_reward(data, plan)
@@ -252,7 +263,7 @@ def compute_obj_metrics():
 						obj_metrics[ID][task][trial][method][3] = Rfeat_opt
 						obj_metrics[ID][task][trial][method][4] = Rvel_opt - Rvel
 						obj_metrics[ID][task][trial][method][5] = Rfeat_opt - Rfeat
-				plan.kill_planner()
+						plan.kill_planner()
 	return obj_metrics
 
 def compute_subj_metrics():
@@ -313,14 +324,14 @@ def	reorganize_data(filename):
 	objective measures and subjective measures.
 	"""
 	obj_metrics = compute_obj_metrics()
-	subj_metrics = compute_subj_metrics()
+	#subj_metrics = compute_subj_metrics() 		# TODO UNCOMMENT ME
 		
 
 	# write to file
 	here = os.path.dirname(os.path.realpath(__file__))
 	subdir = "/data/experimental/"
 	filepath_obj = here + subdir + filename + "_obj.csv"
-	filepath_subj = here + subdir + filename + "_subj.csv"
+	#filepath_subj = here + subdir + filename + "_subj.csv"	# TODO UNCOMMENT ME
 
 	# write objective metrics
 	with open(filepath_obj, 'w') as out_obj:
@@ -341,6 +352,7 @@ def	reorganize_data(filename):
 							out_obj.write('\n')
 	out_obj.close()
 
+	"""
 	# write subjective metrics
 	
 	with open(filepath_subj, 'w') as out_subj:
@@ -355,6 +367,7 @@ def	reorganize_data(filename):
 				out_subj.write('\n')
 			#out_subj.write('\n')
 	out_subj.close()
+	"""
 
 def test():
 	filename = "tracked111A1.csv"
@@ -377,23 +390,23 @@ def test():
 			i += 1
 		data = np.array(methodData)
 		print data
-		plan = Planner(1, demo=False)
+		plan = Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=1)
 		res = compute_reward(data, plan)
 		print res
 
 
 if __name__ == '__main__':
 	
-	filename = "pilot_metrics"
+	#filename = "pilot_metrics"
 	#reorganize_data(filename)
 
-	#experi = ExperimentUtils()
+	experi = ExperimentUtils()
 	#ID = 9
-	#task = 2
+	task = TWO_FEAT
 	#method = "B"
 	#trial = 2
-	#plan = get_opt_waypts(task)
+	res = save_opt_waypts(task)
 	#experi.plot_trajDebug(plan)
 
-	#print "task 1 opt: " + str(compute_optimalReward(1), precomputed=False)
+	print "task" + str(task) + " opt: " + str(res)
 	
