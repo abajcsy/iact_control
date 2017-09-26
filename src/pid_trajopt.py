@@ -196,6 +196,7 @@ class PIDVelJaco(object):
 		
 		# stores the current trajectory we are tracking, produced by planner
 		self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, seed=None)		
+
 		#self.traj = self.planner.replan(self.start, self.goal, self.weights, 0.0, self.T, 0.5, goal_pose=self.place_pose)
 		print "original traj: " + str(self.traj)
 
@@ -236,13 +237,8 @@ class PIDVelJaco(object):
 		# ---- Experimental Utils ---- #
 
 		self.expUtil = experiment_utils.ExperimentUtils()
-		# store original trajectory
-
-		# TODO THIS IS EXPERIMENTAL
-		original_traj = self.planner.get_waypts_plan()	
-		#original_traj = self.traj.get_waypts_plan()
-
-		self.expUtil.update_original_traj(original_traj)
+		# update the list of replanned trajectories with new trajectory
+		self.expUtil.update_replanned_trajList(0.0, self.traj)
 
 		# ---- ROS Setup ---- #
 
@@ -273,9 +269,9 @@ class PIDVelJaco(object):
 		
 		print "----------------------------------"
 
-		#self.planner.plot_feature_update()
 		# plot weight update over time
-		self.planner.plot_weight_update()
+		#self.planner.plot_feature_update()
+		#self.planner.plot_weight_update()
 
 		# save experimental data (only if experiment started)
 		if self.record and self.reached_start:
@@ -288,13 +284,13 @@ class PIDVelJaco(object):
 			weights_filename = "weights" + str(ID) + str(numFeat) + method
 			force_filename = "force" + str(ID) + str(numFeat) + method		
 			tracked_filename = "tracked" + str(ID) + str(numFeat) + method
-			original_filename = "original" + str(ID) + str(numFeat) + method
-			deformed_filename = "deformed" + str(ID) + str(numFeat) + method		
-			self.expUtil.save_tauH(force_filename)	
-			self.expUtil.save_tracked_traj(tracked_filename)
-			self.expUtil.save_original_traj(original_filename)
-			self.expUtil.save_deformed_traj(deformed_filename)
-			self.expUtil.save_weights(weights_filename)
+			deformed_filename = "deformed" + str(ID) + str(numFeat) + method
+			replanned_filename = "replanned" + str(ID) + str(numFeat) + method		
+			self.expUtil.pickle_weights(weights_filename)
+			self.expUtil.pickle_force(force_filename)	
+			self.expUtil.pickle_tracked_traj(tracked_filename)
+			self.expUtil.pickle_deformed_traj(deformed_filename)
+			self.expUtil.pickle_replanned_trajList(replanned_filename)
 
 		# end admittance control mode
 		self.stop_admittance_mode()
@@ -365,38 +361,6 @@ class PIDVelJaco(object):
 				self.interaction_count = 0
 				self.no_interaction_count += 1
 
-
-		"""
-		if self.methodType == ZERO_FEEDBACK:
-			if self.interaction_count > 0 and not self.gravity_comp_mode:
-				self.controller.set_gains(0.0*self.P,0.0*self.I,0.0*self.D, 0, 0)
-				self.gravity_comp_mode = True
-				print "starting gravity compensation mode..."
-			if self.no_interaction_count > 7 and self.gravity_comp_mode:
-				self.controller.set_gains(self.P,self.I,self.D, 0, 0)
-				self.gravity_comp_mode = False
-				print "stopping gravity compensation mode..."
-		"""
-
-		if self.path_start_T is not None:
-			# for tracing weight updates
-			if self.planner.weight_update is None:
-				self.planner.weight_update = np.array([self.planner.weights])
-				self.planner.update_time = np.array([time.time() - self.path_start_T])
-			else:
-				self.planner.weight_update = np.append(self.planner.weight_update,np.array([self.planner.weights]),0)
-				self.planner.update_time = np.append(self.planner.update_time,np.array([time.time() - self.path_start_T]))
-
-			# more updates of tracking feature updates
-			if self.planner.feature_update is None and self.planner.curr_features is not None:
-				diff = self.planner.curr_features - self.planner.prev_features
-				self.planner.feature_update = np.array([diff])
-				self.planner.update_time2 = np.array([time.time() - self.path_start_T])
-			elif self.planner.curr_features is not None:
-				diff = self.planner.curr_features - self.planner.prev_features
-				self.planner.feature_update = np.append(self.planner.feature_update,np.array([diff]),0)
-				self.planner.update_time2 = np.append(self.planner.update_time2,np.array([time.time() - self.path_start_T]))
-
 		# if experienced large enough interaction force, then deform traj
 		if self.interaction:
 			#print "--- INTERACTION ---"
@@ -405,30 +369,6 @@ class PIDVelJaco(object):
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_tauH(timestamp, torque_curr)
 
-				"""
-				# compute the optimal difference in configuration space
-				deltaQDes = self.planner.computeDeltaQDes(self.start, self.goal, self.T, self.traj, timestamp)
-				print "deltaQDes: " + str(deltaQDes)
-
-				# compute argmax of dot product between actual_deltaQ and  des_deltaQ
-				inner_prod = [0.0]*len(self.weights)
-				for i in range(len(self.weights)):
-					des_deltaQ = np.array(deltaQDes[i])
-
-					# compute actual delta q at current time
-					curr_q = self.curr_pos
-					if self.traj is not None:
-					desired_q = self.traj.interpolate(timestamp)
-					actual_deltaQ = desired_q - curr_q
-				
-					#print "des_deltaQ: " + str(des_deltaQ)
-					#print "actual_deltaQ: " + str(actual_deltaQ)
-					# compute dot product between actual and desired changes in configuration
-					inner_prod[i] = np.dot(actual_deltaQ.T,des_deltaQ)[0][0]
-				print "(abs) inner prod: " + str(np.fabs(inner_prod))
-				feat_idx_opt = np.argmax(np.fabs(inner_prod))
-				print "feat_idx_opt: " + str(feat_idx_opt)
-				"""
 
 				# TODO THIS IS EXPERIMENTAL
 				self.weights = self.planner.learnWeights(torque_curr)
@@ -445,6 +385,9 @@ class PIDVelJaco(object):
 				# update the experimental data with new weights
 				timestamp = time.time() - self.path_start_T
 				self.expUtil.update_weights(timestamp, self.weights)
+
+				# update the list of replanned trajectories with new trajectory
+				self.expUtil.update_replanned_trajList(timestamp, self.traj)
 
 				# store deformed trajectory
 				# TODO THIS IS EXPERIMENTAL

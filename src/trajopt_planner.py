@@ -23,6 +23,7 @@ from openrave_utils import *
 import logging
 import pid
 import copy
+import os
 
 import pickle
 
@@ -91,8 +92,9 @@ class Planner(object):
 		self.step_time_plan = None
 
 		# this is the cache of trajectories computed for all max/min weights
-		self.traj_cache_1feat = pickle.load( open( "/home/abajcsy/catkin_ws/src/iact_control/src/traj_cache_1feat.p", "rb" ) )
-		self.traj_cache_2feat = pickle.load( open( "/home/abajcsy/catkin_ws/src/iact_control/src/traj_cache_2feat.p", "rb" ) )	
+		here = os.path.dirname(os.path.realpath(__file__))
+		self.traj_cache_1feat = pickle.load( open( here+"/traj_cache_1feat.p", "rb" ) )
+		self.traj_cache_2feat = pickle.load( open( here+"/traj_cache_2feat.p", "rb" ) )	
 
 		# these variables are for the upsampled trajectory
 		self.waypts = None

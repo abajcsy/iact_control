@@ -25,7 +25,7 @@ def initialize(model_filename='jaco', envXML=None):
 	env = openravepy.Environment()
 	if envXML is not None:
 		env.LoadURI(envXML)
-	#env.SetViewer('qtcoin')
+	env.SetViewer('qtcoin')
 
 	# Assumes the robot files are located in the data folder of the
 	# kinova_description package in the catkin workspace.
@@ -39,7 +39,6 @@ def initialize(model_filename='jaco', envXML=None):
 	robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
 	robot.SetDOFValues(robot_starting_dofs)
 
-	"""
 	viewer = env.GetViewer()
 	viewer.SetSize(700,500)
 	cam_params = np.array([[-0.99885711, -0.01248719, -0.0461361 , -0.18887213],
@@ -47,7 +46,6 @@ def initialize(model_filename='jaco', envXML=None):
 		   [ 0.04076329, -0.72657133, -0.68588079,  1.67818344],
 		   [ 0.        ,  0.        ,  0.        ,  1.        ]])
 	viewer.SetCamera(cam_params)
-	"""
 
 	return env, robot
 
@@ -85,12 +83,12 @@ def manipToCartesian(robot, offset_z):
 	offset = np.array([0,0,offset_z]).T
 	return xyz
 
-def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0]):
+def plotCupTraj(env,robot,bodies,waypts,color=[0,1,0], increment=1):
 	"""
 	Plots trajectory of the cup
 	"""
 
-	for i in range(0,len(waypts)):
+	for i in range(0,len(waypts),increment):
 		waypoint = waypts[i]
 		dof = np.append(waypoint, np.array([1, 1, 1]))
 		dof[2] += math.pi
