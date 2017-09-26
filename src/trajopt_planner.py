@@ -539,7 +539,7 @@ class Planner(object):
 						    "wxyz" : quat_target, 
 						    "link": "j2s7s300_link_7",
 							"rot_coeffs" : [0,0,0],
-							"pos_coeffs" : [15,15,15],
+							"pos_coeffs" : [35,35,35],
 						    }
 			}
 			],
