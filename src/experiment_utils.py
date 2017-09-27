@@ -242,7 +242,7 @@ if __name__ == '__main__':
 
 	# ---- test tracked/deformed trajectory saving and parsing ---- #
 	"""
-	filename = "tracked02A1.p"
+	filename = "tracked22A1.p"
 	waypts = exp.parse_tracked_traj(filename)
 	#filename = "deformed01A1.p"
 	#waypts = exp.parse_deformed_traj(filename)	
