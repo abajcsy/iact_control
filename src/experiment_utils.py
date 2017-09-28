@@ -18,6 +18,8 @@ import pickle
 import openrave_utils
 from openrave_utils import *
 
+import data_io
+
 class ExperimentUtils(object):
 	
 	def __init__(self):
@@ -161,76 +163,12 @@ class ExperimentUtils(object):
 		filepath = self.get_unique_filepath("force",filename)
 		pickle.dump(self.tauH, open( filepath, "wb" ) )
 
-	# ----- Parsing (de-pickling) utilities ------- #
-
-	def parse_replanned_trajList(self, filename):
-		"""
-		Returns dictionary of trajectories, with timestamps as keys
-		"""
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/replanned/"
-		filepath = here + subdir + filename
-
-		trajList = pickle.load( open( filepath, "rb" ) )
-		return trajList
-
-	def parse_tracked_traj(self, filename):
-		"""
-		Returns trajectory
-		"""
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/tracked/"
-		filepath = here + subdir + filename
-
-		traj = pickle.load( open( filepath, "rb" ) )
-
-		# returns only the waypoints, not timestamps!
-		return traj[:,1:len(traj)+1]
-
-	def parse_deformed_traj(self,filename):
-		"""
-		Returns trajectory
-		"""
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/deformed/"
-		filepath = here + subdir + filename
-
-		traj = pickle.load( open( filepath, "rb" ) )
-
-		return traj
-
-	def parse_weights(self,filename):
-		"""
-		Returns tuple: (timestamp list, weight list)
-		"""
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/weights/"
-		filepath = here + subdir + filename
-
-		weights = pickle.load( open( filepath, "rb" ) )
-		return (weights[:,0:1], weights[:,1:len(weights)+1])
-
-	def parse_force(self, filename):
-		"""
-		Returns tuple (timestamp list, force list)
-		"""
-		# get the current script path
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/force/"
-		filepath = here + subdir + filename
-
-		force = pickle.load( open( filepath, "rb" ) )
-		return (force[:,0:1], force[:,1:len(force)+1])
 
 if __name__ == '__main__':
 	env, robot = openrave_utils.initialize(model_filename='jaco_dynamics')
 	bodies = []
 
-	exp = ExperimentUtils()
+	#exp = ExperimentUtils()
 	
 	# ---- test replanned trajectory saving and parsing ---- #
 	"""	

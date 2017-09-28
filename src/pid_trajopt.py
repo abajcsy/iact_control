@@ -351,16 +351,6 @@ class PIDVelJaco(object):
 				torque_curr[i][0] = 0.0
 		#print "Cleaned torque: " + str(torque_curr)
 
-		if self.path_start_T is not None: # make sure we got to start before allowing interaction!
-			if self.interaction:
-				timestamp = time.time() - self.path_start_T
-				self.expUtil.update_tauH(timestamp, torque_curr)
-				self.interaction_count += 1
-				self.no_interaction_count = 0
-			else:
-				self.interaction_count = 0
-				self.no_interaction_count += 1
-
 		# if experienced large enough interaction force, then deform traj
 		if self.interaction:
 			#print "--- INTERACTION ---"

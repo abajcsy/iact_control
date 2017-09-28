@@ -164,15 +164,15 @@ class Planner(object):
 		---
 		input trajectory, output list of feature values
 		"""
-		features = [None,None,None,None]
+		features = [None,None,None]#,None]
 		features[0] = self.velocity_features(waypts)
 		features[1] = [0.0]*(len(waypts)-1)
 		features[2] = [0.0]*(len(waypts)-1)
-		features[3] = [0.0]*(len(waypts)-1)
+		#features[3] = [0.0]*(len(waypts)-1)
 		for index in range(0,len(waypts)-1):
 			features[1][index] = self.coffee_features(waypts[index+1])
 			features[2][index] = self.table_features(waypts[index+1])
-			features[3][index] = self.laptop_features(waypts[index+1],waypts[index])
+			#features[3][index] = self.laptop_features(waypts[index+1],waypts[index])
 			#elif self.task == HUMAN_TASK:
 			#	features[1][index] = self.human_features(waypts[index+1],waypts[index])
 		return features
