@@ -9,12 +9,13 @@ import logging
 import copy
 import os
 import pickle
+import data_io
 
 import openrave_utils
 from openrave_utils import *
 
 # TODO UPDATE THIS WITH THE NUMBER OF PEOPLE
-NUM_PPL = 8
+NUM_PPL = 9
 
 def get_pickled_metrics(filename):
 	"""
@@ -326,8 +327,166 @@ def plot_taskCost(saveFig=False):
 		fig.savefig(datapath+"taskCost.pdf", bbox_inches="tight")
 		print "Saved cost figure."
 
+
+def augment_weights(time, weights):
+	"""
+	Augments the weight data with 0.1 sec timesteps
+	"""
+	#print "time: " + str(time)
+	cup_w = weights[:,0]
+	table_w = weights[:,1]
+	#print "cup_w: " + str(cup_w)
+	#print "table_w: " + str(table_w)
+
+	aug_time = [0.0]*200 # traj is 20 sec, sampling at 0.1 sec
+	aug_cup = [0.0]*200
+	aug_table = [0.0]*200
+
+	aug_idx = 0
+	idx = 0
+	prev_cup = 0.0
+	prev_table = 0.0
+	times = np.arange(0.1, 20.0, 0.1)
+	for t in times:
+		aug_time[aug_idx] = t
+		#clipped_t = round(time[idx][0],1)
+		if idx < len(cup_w) and np.isclose(round(time[idx][0],1), t, rtol=1e-05, atol=1e-08, equal_nan=False):
+			aug_cup[aug_idx] = cup_w[idx]
+			aug_table[aug_idx] = table_w[idx]
+			prev_cup = cup_w[idx]
+			prev_table = table_w[idx]
+			idx += 1
+		else:
+			aug_cup[aug_idx] = prev_cup
+			aug_table[aug_idx] = prev_table
+		aug_idx += 1
+
+	aug_time[-1] = 20.0
+	aug_cup[-1] = prev_cup
+	aug_table[-1] = prev_table
+	return (aug_time, aug_cup, aug_table)
+
+def plot_weights(saveFig=False):
+	weightData = data_io.parse_exp_data("weights")
+
+	f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, sharex='col', sharey='row')
+	#f.set_title('Task 1: Table')
+	ax1.set_title('Update ALL')
+	ax2.set_title('Update ONE')
+	ax3.set_xlabel('time (s)')
+	ax4.set_xlabel('time (s)')
+	ax1.set_ylabel('weight')
+	ax3.set_ylabel('weight')
+
+	ax1.set_ylim([-1.5, 1.5])
+	ax2.set_ylim([-1.5, 1.5])
+	ax3.set_ylim([-1.5, 1.5])
+	ax4.set_ylim([-1.5, 1.5])
+
+	ax1.set_xlim([0, 20])
+	ax2.set_xlim([0, 20])
+	ax3.set_xlim([0, 20])
+	ax4.set_xlim([0, 20])
+
+	#ax2.set_title('Task 2: Table+Cup')
+
+	greyC = "grey"		#(44/255., 160/255., 44/255.)
+	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
+	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
+
+	task = 2
+	trial = 2
+
+	if task == 1:
+		f.suptitle("Task 1: Correct Distance to Table",fontsize=20)
+	else:
+		f.suptitle("Task 2: Correct Distance to Table + Cup Orientation",fontsize=20)
+	Acount = 0
+	Bcount = 0
+
+	"""
+	for method in weightData[1][task][trial]:
+		data = weightData[1][task][trial][method]
+		timestamp = data[:,0:1]
+		weights = data[:,1:len(data)+1]
+
+		(aug_time, aug_cup, aug_table) = augment_weights(timestamp, weights)
+
+		if method == "A":
+			if Acount != 0:
+				ax1.plot(aug_time,aug_cup,linewidth=4.0, color=greyC)
+				ax3.plot(aug_time,aug_table,linewidth=4.0, color='k')
+			else:
+				ax1.plot(aug_time,aug_cup,linewidth=4.0, color=greyC, label='Cup')
+				ax3.plot(aug_time,aug_table,linewidth=4.0, color='k', label='Table')
+				Acount += 1
+				ax1.axhline(y=0, color='k', linestyle='-')
+				ax1.legend()
+				ax3.axhline(y=0, color='k', linestyle='-')
+				ax3.legend()
+		elif method == "B":
+			if Bcount != 0:
+				ax2.plot(aug_time,aug_cup,linewidth=4.0, color=orangeC)
+				ax4.plot(aug_time,aug_table,linewidth=4.0, color='r')
+			else:
+				ax2.plot(aug_time,aug_cup,linewidth=4.0, color=orangeC, label='Cup')
+				ax4.plot(aug_time,aug_table,linewidth=4.0, color='r', label='Table')
+				Bcount += 1
+				ax2.axhline(y=0, color='k', linestyle='-')
+				ax2.legend()				
+				ax4.axhline(y=0, color='k', linestyle='-')
+				ax4.legend()
+	"""
+
+	for ID in weightData.keys():
+		#for task in weightData[ID]:
+		# trial can take values 1 or 2
+		#for trial in weightData[ID][task]:
+		for method in weightData[ID][task][trial]:
+			
+			data = weightData[ID][task][trial][method]
+			timestamp = data[:,0:1]
+			weights = data[:,1:len(data)+1]
+
+			(aug_time, aug_cup, aug_table) = augment_weights(timestamp, weights)
+
+			if method == "A":
+				if Acount != 0:
+					ax1.plot(aug_time,aug_cup,linewidth=4.0, color=greyC)
+					ax3.plot(aug_time,aug_table,linewidth=4.0, color='k')
+				else:
+					ax1.plot(aug_time,aug_cup,linewidth=4.0, color=greyC, label='Cup')
+					ax3.plot(aug_time,aug_table,linewidth=4.0, color='k', label='Table')
+					Acount += 1
+					ax1.axhline(y=0, color='k', linestyle='-')
+					ax1.legend()
+					ax3.axhline(y=0, color='k', linestyle='-')
+					ax3.legend()
+			elif method == "B":
+				if Bcount != 0:
+					ax2.plot(aug_time,aug_cup,linewidth=4.0, color=orangeC)
+					ax4.plot(aug_time,aug_table,linewidth=4.0, color='r')
+				else:
+					ax2.plot(aug_time,aug_cup,linewidth=4.0, color=orangeC, label='Cup')
+					ax4.plot(aug_time,aug_table,linewidth=4.0, color='r', label='Table')
+					Bcount += 1
+					ax2.axhline(y=0, color='k', linestyle='-')
+					ax2.legend()				
+					ax4.axhline(y=0, color='k', linestyle='-')
+					ax4.legend()
+				
+	plt.show()
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		f.savefig(datapath+"task"+str(task)+"Weights.pdf", bbox_inches="tight")
+		print "Saved weights figure."
+
+
 if __name__ == '__main__':
 	#plot_taskEffort(saveFig=True)
 	#plot_taskEffortTime(saveFig=True)
-	plot_taskCost(saveFig=True)
-
+	#plot_taskCost(saveFig=True)
+	plot_weights(saveFig=True)

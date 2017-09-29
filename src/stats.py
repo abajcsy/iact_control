@@ -39,6 +39,8 @@ MAX = "MAX"								# updates only feature that changed the most
 
 EXP_TASK = 2
 
+NUM_PPL = 9				# num participants
+
 # ------- Saves out cleaned and computed statistics ------# 
 
 def	save_parsed_data(filename, csvData=True, pickleData=False):
@@ -50,7 +52,7 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 	If you want to pickle or not
 	"""
 	obj_metrics = compute_obj_metrics()
-	#subj_metrics = compute_subj_metrics()
+	subj_metrics = compute_subj_metrics()
 	
 	# write to file
 	here = os.path.dirname(os.path.realpath(__file__))
@@ -60,12 +62,12 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 	if pickleData:
 		filepath_obj = here + subdir + filename + "_obj.p"
 		pickle.dump(obj_metrics, open( filepath_obj, "wb" ) )
-		#filepath_subj = here + subdir + filename + "_subj.p"
-		#pickle.dump(subj_metrics, open( filepath_subj, "wb" ) )
+		filepath_subj = here + subdir + filename + "_subj.p"
+		pickle.dump(subj_metrics, open( filepath_subj, "wb" ) )
 
 	if csvData:
 		filepath_obj = here + subdir + filename + "_obj.csv"
-		#filepath_subj = here + subdir + filename + "_subj.csv"
+		filepath_subj = here + subdir + filename + "_subj.csv"
 
 		# write objective metrics
 		with open(filepath_obj, 'w') as out_obj:
@@ -84,20 +86,20 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 							out_obj.write('\n')
 		out_obj.close()
 
-		"""
 		# write subjective metrics
 		with open(filepath_subj, 'w') as out_subj:
-			header = "participant,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10\n"
+			header = "participant,task,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10\n"
 			out_subj.write(header)
 			for ID in subj_metrics.keys():
-				for method in subj_metrics[ID]:
-					row = "P"+str(ID)+","+method
-					out_subj.write(row)
-					for num in subj_metrics[ID][method]:
-						out_subj.write(","+str(num))
-			out_subj.write('\n')
+				for task in subj_metrics[ID]:
+					for method in subj_metrics[ID][task]:
+						row = "P"+str(ID)+","+str(task)+","+method
+						out_subj.write(row)
+						for num in subj_metrics[ID][task][method]:
+							out_subj.write(","+str(num))
+						out_subj.write('\n')
 		out_subj.close()
-		"""
+	
 
 # ------ Creates large dictionary of all relevant statistics -----------#
 
@@ -176,6 +178,54 @@ def compute_obj_metrics():
 
 	return obj_metrics
 
+def compute_subj_metrics():
+	"""
+	Computes all subjective metric Likert data.
+	"""
+	# each participant does task 1,2 with method A,B = 2*2*N
+	# likert data includes age, gender, Q1 - Q10 = 2+10 = 12
+
+	# set up data structure
+	subj_metrics = {}
+	for ID in range(NUM_PPL):
+		for task in [ONE_FEAT, TWO_FEAT]:
+			for method in ["A","B"]:
+				# sanity checks
+				if ID not in subj_metrics:
+					subj_metrics[ID] = {}
+				if task not in subj_metrics[ID]:
+					subj_metrics[ID][task] = {}
+				if method not in subj_metrics[ID][task]:
+					subj_metrics[ID][task][method] = [None]*12
+
+	here = os.path.dirname(os.path.realpath(__file__))
+	subdir = "/data/experimental/"
+	datapath = here + subdir + "likert_responses_clean.csv"
+
+	data = {}
+	firstline = True
+	with open(datapath, 'r') as f:
+		for line in f:
+			if firstline:
+				firstline = False
+				continue
+			values = line.split(',')
+			ID = int(values[0])
+			task = int(values[2].split(' ')[1]) # Comes as 'Task 1', split on space, take number
+			if values[3] == "ONE":
+				method = "B"
+			elif values[3] == "ALL":
+				method = "A"
+			age = int(values[4])
+			gender = values[5]
+			# store age
+			subj_metrics[ID][task][method][0] = age
+			subj_metrics[ID][task][method][1] = gender
+			# parse likert data
+			for i in range(10):
+				subj_metrics[ID][task][method][i+2] = values[i+6]
+			
+	return subj_metrics
 
 # ------ Utils ------ #
 
@@ -317,7 +367,7 @@ def compute_weight(data, task):
 
 
 if __name__ == '__main__':
-	#compute_obj_metrics()
+	#s = compute_subj_metrics()
 	
 	filename = "metrics"
 	save_parsed_data(filename, csvData=True, pickleData=True)
