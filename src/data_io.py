@@ -4,6 +4,9 @@ import logging
 import copy
 import os
 import pickle
+import time
+
+import trajopt_planner
 
 import openrave_utils
 from openrave_utils import *
@@ -146,6 +149,7 @@ def parse_force(filename):
 	#return (force[:,0:1], force[:,1:len(force)+1])
 
 if __name__ == '__main__':
+	"""
 	data = parse_exp_data("weights")
 	for ID in data.keys():
 		for task in data[ID]:
@@ -155,4 +159,53 @@ if __name__ == '__main__':
 					for i in range(len(d[:,1:len(d)+1])):
 						print d[:,1:len(d)+1][i]
 	#print data
+	"""
+
+	# ---- test tracked/deformed trajectory parsing ---- #
+	pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
+	pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
+	place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+	place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
+
+	EXP_TASK = 2
+
+	env, robot = openrave_utils.initialize(model_filename='jaco_dynamics')
+	bodies = []
+
+	plotTable(env)
+	#plotCabinet(env)
+	#plotTableMount(env,bodies)
+
+	T = 20.0
+	task = 2
+
+	weights = [0.0,0.0]
+	if task == 1:
+		weights = [0.0,1.0]
+	elif task == 2:
+		weights = [1.0,1.0]
+
+	if task == 2:
+		# if two features are wrong, initialize the starting config badly (tilted cup)
+		pick = copy.copy(pick_basic)
+		pick[-1] = 200.0
+	else:
+		pick = copy.copy(pick_basic) 
+	place = copy.copy(place_lower)
+
+	start = np.array(pick)*(math.pi/180.0)
+	goal = np.array(place)*(math.pi/180.0)
+
+	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="MAX", numFeat=task)
+	# choose 0.1 as step size to match real traj
+	plan.replan(start, goal, weights, 0.0, T, 0.1, seed=None)	
+
+	filename = "tracked32B1.p"
+	traj = parse_tracked_traj(filename)
+	waypts = traj[:,1:len(traj)+1]
+	#filename = "deformed01A1.p"
+	#waypts = exp.parse_deformed_traj(filename)	
+	plotCupTraj(env,robot,bodies,waypts,color=[0,1,0],increment=5)
+	plotCupTraj(env,robot,bodies,plan.waypts,color=[0,0,1],increment=5)
+	time.sleep(20)
 

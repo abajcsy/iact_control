@@ -179,9 +179,10 @@ if __name__ == '__main__':
 	"""
 
 	# ---- test tracked/deformed trajectory saving and parsing ---- #
+
 	"""
-	filename = "tracked22A1.p"
-	waypts = exp.parse_tracked_traj(filename)
+	filename = "tracked32B1.p"
+	waypts = data_io.parse_tracked_traj(filename)
 	#filename = "deformed01A1.p"
 	#waypts = exp.parse_deformed_traj(filename)	
 	plotCupTraj(env,robot,bodies,waypts,color=[0,1,0],increment=5)

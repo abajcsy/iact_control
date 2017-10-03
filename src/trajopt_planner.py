@@ -625,11 +625,11 @@ class Planner(object):
 					if dist < np.linalg.norm(w-min_dist_w):
 						min_dist_w = w_i
 
-			print "traj_cache1: " + str(self.traj_cache_1feat)
-			print "traj_cache2: " + str(self.traj_cache_2feat)
+			#print "traj_cache1: " + str(self.traj_cache_1feat)
+			#print "traj_cache2: " + str(self.traj_cache_2feat)
 			init_waypts = np.array(self.traj_cache_1feat[min_dist_w[0]][min_dist_w[1]])
-			print "init_waypts: " + str(init_waypts)
-			print "start config: " + str(start)
+			#print "init_waypts: " + str(init_waypts)
+			#print "start config: " + str(start)
 
 		request = {
 			"basic_info": {

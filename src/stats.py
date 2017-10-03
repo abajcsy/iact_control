@@ -34,12 +34,12 @@ place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
 ONE_FEAT = 1					# experiment where human has to correct only one feature (out of three)
 TWO_FEAT = 2					# experiment where human has to correc two features
 
-ALL = "ALL" 							# updates all features
-MAX = "MAX"								# updates only feature that changed the most
+ALL = "ALL" 					# updates all features
+MAX = "MAX"						# updates only feature that changed the most
 
 EXP_TASK = 2
 
-NUM_PPL = 9				# num participants
+NUM_PPL = 12					# number of participants
 
 # ------- Saves out cleaned and computed statistics ------# 
 
@@ -71,7 +71,10 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 
 		# write objective metrics
 		with open(filepath_obj, 'w') as out_obj:
-			header = "participant,task,attempt,method,Rvel,Rcup,Rtable,Rvel*,Rcup*,Rtable*,RvD,RcD,RtD,Force,iactT,wDot,wFDot,wFAngle,wFDiff,wUpdateScore,RegretCup,RegretTable,wPathLenCup,wPathLenTable,absRDiffCup,absRDiffTable\n"
+			header = "participant,task,attempt,method,"
+			header += "Rvel,Rcup,Rtable,Rvel*,Rcup*,Rtable*,RvD,RcD,RtD,iactForce,iactTime,"
+			header += "DotAvg,DotFinal,AngleFinal,L2Final,CupAway,TableAway,CupDiffFinal,TableDiffFinal,"
+			header +=  "CupWeightPath,TableWeightPath,CupDiff,TableDiff,RegretFinal,AngleAvg,Regret\n"
 			out_obj.write(header)
 			# participant ID can take values 0 - 9
 			for ID in obj_metrics.keys():
@@ -134,8 +137,10 @@ def compute_obj_metrics():
 							obj_metrics[ID][task][trial] = {}
 						if method not in obj_metrics[ID][task][trial]:
 							# stores: 
-							# Rvel,Rcup,Rtable,Rvel*,Rcup*,Rtable*,RvD,RcD,RtD,Force,iactT,wDot,wFDot,wFAngle,wFDiff,wUpdateScore,RegretCup,RegretTable,wPathLenCup,wPathLenTable,absRDiffCup,absRDiffTable
-							obj_metrics[ID][task][trial][method] = np.array([0.0]*22)
+							# Rvel,Rcup,Rtable,Rvel*,Rcup*,Rtable*,RvD,RcD,RtD,iactForce,iactTime,
+							# DotAvg,DotFinal,AngleFinal,L2Final,CupAway,TableAway,CupDiffFinal,TableDiffFinal,
+							# CupWeightPath,TableWeightPath,CupDiff,TableDiff,RegretFinal,AngleAvg,Regret
+							obj_metrics[ID][task][trial][method] = np.array([0.0]*26)
 
 						# --- Compute Effort & Interact Time Metrics ---#
 						data = effortData[ID][task][trial][method]
@@ -150,29 +155,37 @@ def compute_obj_metrics():
 						weight_dotF = compute_weightFinalDot(wdata,task)
 						weight_angle = compute_weightFinalAngle(wdata,task)
 						weight_diff = compute_weightDiff(wdata,task)
-						weight_score = compute_weightUpdateScore(wdata,task)
+						(cup_score, table_score) = compute_awayScore(wdata,task)
 
 						obj_metrics[ID][task][trial][method][11] = weight_dot
 						obj_metrics[ID][task][trial][method][12] = weight_dotF
 						obj_metrics[ID][task][trial][method][13] = weight_angle
 						obj_metrics[ID][task][trial][method][14] = weight_diff
-						obj_metrics[ID][task][trial][method][15] = weight_score
+						obj_metrics[ID][task][trial][method][15] = cup_score
+						obj_metrics[ID][task][trial][method][16] = table_score
 
-						# --- Compute regret --- #
-						(regret_cup, regret_table) = compute_rewardRegret(wdata, task)
-						obj_metrics[ID][task][trial][method][16] = regret_cup
-						obj_metrics[ID][task][trial][method][17] = regret_table
+						# --- Compute per-feature final weight regret --- #
+						(regret_cup, regret_table) = compute_rewardRegretFinal(wdata, task)
+						obj_metrics[ID][task][trial][method][17] = regret_cup
+						obj_metrics[ID][task][trial][method][18] = regret_table
 
 						# --- Compute weight path length --- #
 						(cup_pathLength, table_pathLength) = compute_weightPathLength(wdata)
-						obj_metrics[ID][task][trial][method][18] = cup_pathLength
-						obj_metrics[ID][task][trial][method][19] = table_pathLength
+						obj_metrics[ID][task][trial][method][19] = cup_pathLength
+						obj_metrics[ID][task][trial][method][20] = table_pathLength
 
 						# --- Compute difference between the traj from learned weights and optimal --- #
 						(learnedDiff_cup, learnedDiff_table) = compute_rewardLearnedDiff(wdata, task)
-						obj_metrics[ID][task][trial][method][20] = learnedDiff_cup
-						obj_metrics[ID][task][trial][method][21] = learnedDiff_table
-						
+						obj_metrics[ID][task][trial][method][21] = learnedDiff_cup
+						obj_metrics[ID][task][trial][method][22] = learnedDiff_table
+
+						# --- Compute total final regret --- #
+						obj_metrics[ID][task][trial][method][23] = regret_cup+regret_table
+
+						# --- Weight angle avg over time --- #
+						weight_angleAvg = compute_weightAngleAvg(wdata,task)
+						obj_metrics[ID][task][trial][method][24] = weight_angleAvg
+	
 	# compute tracked trajectory metrics
 	for ID in trackedData.keys():
 		for task in trackedData[ID]:
@@ -200,6 +213,10 @@ def compute_obj_metrics():
 					obj_metrics[ID][task][trial][method][7] = np.fabs(Rcup_opt - Rcup)
 					obj_metrics[ID][task][trial][method][8] = np.fabs(Rtable_opt - Rtable)
 
+					# --- Compute regret of traj executed by robot --- #
+					tracked_regret = compute_rewardRegretTracked(Rcup, Rtable, Rcup_opt, Rtable_opt, task)
+					obj_metrics[ID][task][trial][method][25] = tracked_regret
+					
 					plan.kill_planner()
 
 	return obj_metrics
@@ -316,8 +333,10 @@ def compute_effort(data,ID):
 	edata = data[:,1:8]
 	effort = 0.0
 	if ID in range(0,8):
+		#print "incr 2 id is " + str(ID)
 		incr = 2
 	else:
+		#print "incr 1 id is " + str(ID)
 		incr = 1
 	for t in range(0,len(edata),incr):
 		joint = edata[t]
@@ -338,7 +357,7 @@ def compute_iactT(data, ID):
 	"""
 	time = data[:,0:1]
 	if ID in range(0,8):
-		count = len(time)/2
+		count = len(time)/2.0
 	else:
 		count = len(time)
 	# get only the timestamps
@@ -368,21 +387,18 @@ def compute_rewardLearnedDiff(weightdata, task):
 	then compute the abs value of reward difference between that trajectory 
 	and the	optimal trajectory.
 	"""
+
 	timestamp = weightdata[:,0:1]
 	weights = weightdata[:,1:len(weightdata)+1]
 
 	final_w = weights[-1]
 
-	print "in compute_rewardRegret - task: " + str(task)
-
 	T = 20.0
 	if task == TWO_FEAT:
-		print "two features are wrong"
 		# if two features are wrong, initialize the starting config badly (tilted cup)
 		pick = copy.copy(pick_basic)
 		pick[-1] = 200.0
 	else:
-		print "one feature is wrong"
 		pick = copy.copy(pick_basic) 
 
 	place = copy.copy(place_lower)
@@ -390,7 +406,6 @@ def compute_rewardLearnedDiff(weightdata, task):
 	start = np.array(pick)*(math.pi/180.0)
 	goal = np.array(place)*(math.pi/180.0)
 
-	print "in rewardRegret - start: " + str(start)
 	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=task)
 	# choose 0.1 as step size to match real traj
 	plan.replan(start, goal, final_w, 0.0, T, 0.1, seed=None)	
@@ -409,7 +424,25 @@ def compute_rewardLearnedDiff(weightdata, task):
 
 	return (diff_cup, diff_table)
 
-def compute_rewardRegret(weightdata, task):
+def compute_rewardRegretTracked(Rcup, Rtable, Rcup_opt, Rtable_opt, task):
+	"""
+	Given the rewards of the tracked trajectory and the optimal one, 
+	compute the total regret by weighting the feature count diff by ideal weights
+	"""
+	ideal_w = np.array([0.0,0.0])
+	if task == ONE_FEAT:
+		ideal_w = np.array([0.0,1.0])
+	elif task == TWO_FEAT:
+		ideal_w = np.array([1.0,1.0])
+
+	feat_des = np.array([Rcup_opt, Rtable_opt])
+	feat_tracked = np.array([Rcup, Rtable])
+
+	regret = np.dot(ideal_w, feat_tracked) - np.dot(ideal_w, feat_des)
+
+	return regret
+
+def compute_rewardRegretFinal(weightdata, task):
 	"""
 	Given the final learned weight, compute the trajectory with those weights
 	then compute the abs value of reward difference between that trajectory and the
@@ -426,16 +459,14 @@ def compute_rewardRegret(weightdata, task):
 
 	final_w = weights[-1]
 
-	print "in compute_rewardRegret - task: " + str(task)
+	#print "in compute_rewardRegret - task: " + str(task)
 
 	T = 20.0
 	if task == TWO_FEAT:
-		print "two features are wrong"
 		# if two features are wrong, initialize the starting config badly (tilted cup)
 		pick = copy.copy(pick_basic)
 		pick[-1] = 200.0
 	else:
-		print "one feature is wrong"
 		pick = copy.copy(pick_basic) 
 
 	place = copy.copy(place_lower)
@@ -443,7 +474,7 @@ def compute_rewardRegret(weightdata, task):
 	start = np.array(pick)*(math.pi/180.0)
 	goal = np.array(place)*(math.pi/180.0)
 
-	print "in rewardRegret - start: " + str(start)
+	#print "in rewardRegret - start: " + str(start)
 	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=task)
 	# choose 0.1 as step size to match real traj
 	plan.replan(start, goal, final_w, 0.0, T, 0.1, seed=None)	
@@ -457,70 +488,13 @@ def compute_rewardRegret(weightdata, task):
 	(Rvel_opt, Rcup_opt, Rtable_opt) = get_optimalReward(task)
 
 	# abs value the difference in the regret
-	regret_cup = np.fabs(ideal_w[0]*Rcup - ideal_w[0]*Rcup_opt)
-	regret_table = np.fabs(ideal_w[1]*Rtable - ideal_w[1]*Rtable_opt)
+	regret_cup = ideal_w[0]*Rcup - ideal_w[0]*Rcup_opt
+	regret_table = ideal_w[1]*Rtable - ideal_w[1]*Rtable_opt
 
 	plan.kill_planner()
 
 	return (regret_cup, regret_table)
 
-def compute_rewardTotalRegret(weightdata, task):
-	"""
-	Given the final learned weight, compute the trajectory with those weights
-	then compute the total regret for the task.
-	"""
-
-	ideal_w = [0.0,0.0]
-	if task == ONE_FEAT:
-		ideal_w = [0.0,1.0]
-	elif task == TWO_FEAT:
-		ideal_w = [1.0,1.0]
-
-	timestamp = weightdata[:,0:1]
-	weights = weightdata[:,1:len(weightdata)+1]
-
-	final_w = weights[-1]
-
-	print "in compute_rewardRegret - task: " + str(task)
-
-	T = 20.0
-	if task == TWO_FEAT:
-		print "two features are wrong"
-		# if two features are wrong, initialize the starting config badly (tilted cup)
-		pick = copy.copy(pick_basic)
-		pick[-1] = 200.0
-	else:
-		print "one feature is wrong"
-		pick = copy.copy(pick_basic) 
-
-	place = copy.copy(place_lower)
-
-	start = np.array(pick)*(math.pi/180.0)
-	goal = np.array(place)*(math.pi/180.0)
-
-	print "in rewardRegret - start: " + str(start)
-	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="ALL", numFeat=task)
-	# choose 0.1 as step size to match real traj
-	plan.replan(start, goal, final_w, 0.0, T, 0.1, seed=None)	
-	# compute reward of current traj with final learned weights
-	r = plan.featurize(plan.waypts)
-	Rvel = r[0]
-	Rcup = np.sum(r[1])
-	Rtable = np.sum(r[2])
-
-	# get optimal reward
-	(Rvel_opt, Rcup_opt, Rtable_opt) = get_optimalReward(task)
-
-	# abs value the difference in the regret
-	regret_cup = np.fabs(ideal_w[0]*Rcup - ideal_w[0]*Rcup_opt)
-	regret_table = np.fabs(ideal_w[1]*Rtable - ideal_w[1]*Rtable_opt)
-
-	total_regret = regret_cup + regret_table
-
-	plan.kill_planner()
-
-	return total_regret
-	
 def compute_weightDot(data, task):
 	"""
 	Given the weight data and the task that it was collected for, 
@@ -546,6 +520,36 @@ def compute_weightDot(data, task):
 		# do dot product with ideal_w
 		d = np.dot(w,ideal_w)
 		total += d
+
+	return total/len(aug_time)
+
+def compute_weightAngleAvg(data, task):
+	"""
+	Computes angle with the true reward averaged over time
+	"""
+	if task == ONE_FEAT:
+		ideal_w = np.array([0.0,1.0])
+	elif task == TWO_FEAT:
+		ideal_w = np.array([1.0,1.0])
+
+	timestamp = data[:,0:1]
+	weights = data[:,1:len(data)+1]
+
+	# upsample the weights
+	(aug_time, aug_cup, aug_table) = augment_weights(timestamp, weights)
+
+	total = 0.0
+
+	for t in range(len(aug_time)):
+		# get weight at current time step
+		w = np.array([aug_cup[t],aug_table[t]])
+		if np.linalg.norm(w) != 0.0:
+			# do dot product with ideal_w
+			num = np.dot(w,ideal_w)
+			denom = np.linalg.norm(w)*np.linalg.norm(ideal_w)
+			arg = num/denom
+			theta = np.arccos(arg)
+			total += theta
 
 	return total/len(aug_time)
 
@@ -607,12 +611,11 @@ def compute_weightDiff(data, task):
 	w_T = weights[-1]
 	return np.linalg.norm(ideal_w - w_T)
 
-def compute_weightUpdateScore(data, task):
+def compute_awayScore(data, task):
 	"""
 	Computes the cumulative score for weight updates. 
-	If the weight was updated in the right direction, then 
-	score +1, if weight changes in wrong direction, then score -1
-	and if the same as the ideal weight score 0
+	If the weight was updated in the wrong direction, then 
+	then score 1 and 0 else. Want to minimize this metric.
 	"""
 	if task == ONE_FEAT:
 		ideal_w = np.array([0.0,1.0])
@@ -625,24 +628,37 @@ def compute_weightUpdateScore(data, task):
 	# upsample the weights according to hz rate
 	(aug_time, aug_cup, aug_table) = augment_weights(timestamp, weights)
 
-	w_prev = np.array([aug_cup[0], aug_table[0]])
-	d_prev = np.linalg.norm(ideal_w - w_prev)	
+	cup_prev = np.array([aug_time[0], aug_cup[0]])
+	dcup_prev = np.linalg.norm(ideal_w[0] - cup_prev)	
 
-	score = 0.0
+	table_prev = np.array([aug_time[0], aug_table[0]])
+	dtable_prev = np.linalg.norm(ideal_w[1] - table_prev)	
+
+	cup_score = 0.0
+	table_score = 0.0
 	for t in range(1,len(aug_time)):
-		w_curr = np.array([aug_cup[t], aug_table[t]])
-		d_curr = np.linalg.norm(ideal_w - w_curr)
-		if d_curr < d_prev:
-		# if moved in the right direction, increase score
-			score += 1.0
-		elif d_curr > d_prev:
-		# if moved in the wrong direction, decrease score
-			score -= 1.0
-		else:
-			score += 0.0 # give zero score if weight didn't change?
-		d_prev = d_curr
 
-	return score
+		ideal_cup = np.array([aug_time[t], ideal_w[0]])		
+		ideal_table = np.array([aug_time[t], ideal_w[1]])
+
+		cup_curr = np.array([aug_time[t], aug_cup[t]])
+		dcup_curr = np.linalg.norm(ideal_cup - cup_curr)
+
+		table_curr = np.array([aug_time[t], aug_table[t]])
+		dtable_curr = np.linalg.norm(ideal_table - table_curr)
+
+		if dcup_curr > dcup_prev:
+		# if moved in the wrong direction, decrease score
+			cup_score += 1.0
+
+		if dtable_curr > dtable_prev:
+		# if moved in the wrong direction, decrease score
+			table_score += 1.0
+
+		dcup_prev = dcup_curr
+		dtable_prev = dtable_curr
+
+	return (cup_score, table_score)
 
 def compute_weightPathLength(data):
 	"""
@@ -711,17 +727,20 @@ def augment_weights(time, weights):
 	return (aug_time, aug_cup, aug_table)
 
 if __name__ == '__main__':
-	"""
 	task = 1
 	trial = 1
-	method = "B"
-	weightData = data_io.parse_exp_data("weights")
-	wdata = weightData[8][task][trial][method]	
-	weight_metric = compute_weightFinal(wdata,task)
-	print "weight_metric: " + str(weight_metric)
-	"""
-	#s = compute_subj_metrics()
+	method = "A"
+	ID = 7
+	effortData = data_io.parse_exp_data("force")
+	data = effortData[ID][task][trial][method]
+	effort = compute_effort(data,ID)
+	print "effort 7: " + str(effort)
+	
+	ID = 9
+	data = effortData[ID][task][trial][method]
+	effort = compute_effort(data,ID)
+	print "effort 9: " + str(effort)
  
-	filename = "metrics"
-	save_parsed_data(filename, csvData=True, pickleData=True)
+	#filename = "metrics"
+	#save_parsed_data(filename, csvData=True, pickleData=True)
 	

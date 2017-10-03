@@ -14,8 +14,8 @@ import data_io
 import openrave_utils
 from openrave_utils import *
 
-# TODO UPDATE THIS WITH THE NUMBER OF PEOPLE
-NUM_PPL = 9
+# UPDATE THIS WITH THE CORRECT NUMBER OF PEOPLE
+NUM_PPL = 12
 
 def get_pickled_metrics(filename):
 	"""
@@ -171,6 +171,7 @@ def plotting_regret(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY):
 	rectsA_table = ax.bar(ind+offset, avgA[:,1], width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',hatch="/",linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsB_cup = ax.bar(ind+offset+width, avgB[:,0], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsB_table = ax.bar(ind+offset+width, avgB[:,1], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',hatch="/",error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
 	"""
 	rectsA_cup = ax.bar(ind+offset, avgA[:,0], width, color=greyC, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsA_table = ax.bar(ind+offset, avgA[:,1], width, color=greyC, ecolor='k', edgecolor='#272727',hatch="/",linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
@@ -220,8 +221,6 @@ def plotting_regret(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY):
 	ax.yaxis.set_ticks_position('none') 		
 
 	leg = ax.legend((rectsA_cup, rectsA_table, rectsB_cup, rectsB_table), (r'\textbf{Update-All: cup}', r'\textbf{Update-ALL: table}', r'\textbf{Update-ONE: cup}', r'\textbf{Update-ONE: table}'), fontsize=20)
-		
-
 	leg.get_frame().set_linewidth(0.0)
 	plt.show()
 

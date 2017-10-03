@@ -35,3 +35,15 @@ ID,Method/Task Order,Task,Method,Age,Gender,TechBG,I successfully taught the rob
 8,Order 3,Task 2,ALL,23,Female,Yes,6,7,2,6,3,5,7,2,2,6
 8,Order 3,Task 1,ONE,23,Female,Yes,7,6,7,5,5,7,7,6,1,6
 8,Order 3,Task 1,ALL,23,Female,Yes,6,5,7,5,6,7,7,6,1,6
+9,Order 4,Task 2,ALL,22,Male,Yes,5,5,4,5,5,4,2,2,4,5
+9,Order 4,Task 2,ONE,22,Male,Yes,4,4,3,3,5,3,6,4,3,4
+9,Order 4,Task 1,ALL,22,Male,Yes,6,5,4,4,3,4,5,5,3,5
+9,Order 4,Task 1,ONE,22,Male,Yes,5,5,2,5,3,2,3,3,4,3
+10,Order 4,Task 2,ALL,22,Non-binary trans-masculine,Yes,5,5,2,5,2,1,1,1,1,4
+10,Order 4,Task 2,ONE,22,Non-binary trans-masculine,Yes,7,5,3,5,3,2,5,1,1,6
+10,Order 4,Task 1,ALL,22,Non-binary trans-masculine,Yes,6,3,6,3,6,6,7,7,2,6
+10,Order 4,Task 1,ONE,22,Non-binary trans-masculine,Yes,7,7,1,7,1,1,1,1,4,4
+11,Order 4,Task 2,ALL,28,Female,No,4,5,2,5,1,1,1,2,2,6
+11,Order 4,Task 2,ONE,28,Female,No,3,1,2,2,6,2,2,2,2,6
+11,Order 4,Task 1,ALL,28,Female,No,2,2,6,3,5,5,6,6,2,6
+11,Order 4,Task 1,ONE,28,Female,No,6,6,1,5,2,2,6,1,1,6

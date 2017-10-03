@@ -35,3 +35,15 @@ P8,1,A,23,Female,Yes,6,5,7,5,6,7,7,6,1
 P8,1,B,23,Female,Yes,7,6,7,5,5,7,7,6,1
 P8,2,A,23,Female,Yes,6,7,2,6,3,5,7,2,2
 P8,2,B,23,Female,Yes,6,5,1,4,5,2,5,2,1
+P9,1,A,22,Male,Yes,6,5,4,4,3,4,5,5,3
+P9,1,B,22,Male,Yes,5,5,2,5,3,2,3,3,4
+P9,2,A,22,Male,Yes,5,5,4,5,5,4,2,2,4
+P9,2,B,22,Male,Yes,4,4,3,3,5,3,6,4,3
+P10,1,A,22,Non-binary trans-masculine,Yes,6,3,6,3,6,6,7,7,2
+P10,1,B,22,Non-binary trans-masculine,Yes,7,7,1,7,1,1,1,1,4
+P10,2,A,22,Non-binary trans-masculine,Yes,5,5,2,5,2,1,1,1,1
+P10,2,B,22,Non-binary trans-masculine,Yes,7,5,3,5,3,2,5,1,1
+P11,1,A,28,Female,No,2,2,6,3,5,5,6,6,2
+P11,1,B,28,Female,No,6,6,1,5,2,2,6,1,1
+P11,2,A,28,Female,No,4,5,2,5,1,1,1,2,2
+P11,2,B,28,Female,No,3,1,2,2,6,2,2,2,2
