@@ -177,7 +177,7 @@ if __name__ == '__main__':
 	#plotTableMount(env,bodies)
 
 	T = 20.0
-	task = 2
+	task = 1
 
 	weights = [0.0,0.0]
 	if task == 1:
@@ -199,13 +199,26 @@ if __name__ == '__main__':
 	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="MAX", numFeat=task)
 	# choose 0.1 as step size to match real traj
 	plan.replan(start, goal, weights, 0.0, T, 0.1, seed=None)	
+	plotCupTraj(env,robot,bodies,plan.waypts,color=[0,0,1],increment=5)
 
-	filename = "tracked32B1.p"
-	traj = parse_tracked_traj(filename)
-	waypts = traj[:,1:len(traj)+1]
+
+	filename = "tracked01A1.p"
+	filenamew = "weights01A1.p"
+	#filename = "tracked32B1.p"
+	#traj = parse_tracked_traj(filename)
+	#waypts = traj[:,1:len(traj)+1]
+
+	timeweights = parse_weights(filenamew)
+	w = timeweights[:,1:len(timeweights)+1]
+	final_w = w[-1]
+
+	plan.replan(start, goal, final_w, 0.0, T, 0.1, seed=None)	
+	plotCupTraj(env,robot,bodies,plan.waypts,color=[0,1,0],increment=5)
+
 	#filename = "deformed01A1.p"
 	#waypts = exp.parse_deformed_traj(filename)	
-	plotCupTraj(env,robot,bodies,waypts,color=[0,1,0],increment=5)
-	plotCupTraj(env,robot,bodies,plan.waypts,color=[0,0,1],increment=5)
+	#plotCupTraj(env,robot,bodies,waypts,color=[0,1,0],increment=5)
+	#plotCupTraj(env,robot,bodies,plan.waypts,color=[0,0,1],increment=5)
+	print "final_w: " + str(final_w)	
 	time.sleep(20)
 

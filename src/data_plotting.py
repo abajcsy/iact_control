@@ -10,12 +10,22 @@ import copy
 import os
 import pickle
 import data_io
+import trajopt_planner
+import time
 
 import openrave_utils
 from openrave_utils import *
 
 # UPDATE THIS WITH THE CORRECT NUMBER OF PEOPLE
 NUM_PPL = 12
+
+pick_basic = [104.2, 151.6, 183.8, 101.8, 224.2, 216.9, 310.8]
+pick_shelf = [210.8, 241.0, 209.2, 97.8, 316.8, 91.9, 322.8]
+place_lower = [210.8, 101.6, 192.0, 114.7, 222.2, 246.1, 322.0]
+place_higher = [210.5,118.5,192.5,105.4,229.15,245.47,316.4]
+
+EXP_TASK = 2
+
 
 def get_pickled_metrics(filename):
 	"""
@@ -32,7 +42,7 @@ def get_pickled_metrics(filename):
 
 # ---- Plotting Functionality ---- #
 
-def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
+def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, twostar=False, pval=[0.01,0.01]):
 	ind = np.arange(2)  # the x locations for the groups
 	width = 0.45       # the width of the bars
 	offset = 0.15
@@ -49,19 +59,10 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
 
 	fig, ax = plt.subplots()
 
-	# plots with stdev
-	if avgOpt is None:
-		rectsA = ax.bar(ind+offset, avgA, width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-		rectsB = ax.bar(ind+width+offset, avgB, width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	else: 
-		width = 0.25
-		print avgA
-		rectsA_cup = ax.bar(ind+offset, avgA[:,0], width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-		rectsA_table = ax.bar(ind+offset, avgA[:,1], width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',hatch="/",linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-		rectsB_cup = ax.bar(ind+offset+width, avgB[:,0], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-		rectsB_table = ax.bar(ind+offset+width, avgB[:,1], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',hatch="/",error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-		rectsOpt_cup = ax.bar(ind+offset+width*2, avgOpt[:,0], width, color=blueC,ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))	
-		rectsOpt_table = ax.bar(ind+offset+width*2, avgOpt[:,1], width, color=blueC,ecolor='k',linewidth=0.5, edgecolor='#272727',hatch="/",error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))		
+
+	rectsA = ax.bar(ind+offset, avgA, width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsB = ax.bar(ind+width+offset, avgB, width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
 
 	def autolabel(rects):
 		"""
@@ -72,54 +73,50 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
 			ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,'%.2f' % 
 					height,ha='center', va='bottom', fontsize=15)
 
-	def autolabel_star(rects, std,p):
+	def autolabel_star(rects, std, p, second=False, twostar=False):
 		"""
 		Attach a text label above each bar displaying its height
 		"""
-		for i in range(len(rects)):
-			height = rects[i].get_height()
-			# cost:
-			#x = rects[i].get_x() + rects[i].get_width()*1.5
-			#y = std[i]+height+10
+		for i in range(0,len(rects),2):
+			height1 = rects[i].get_height()
+			height2 = rects[i+1].get_height()
+			height = max(height1,height2)
 
-			# time:
-			#x = rects[i].get_x() + rects[i].get_width()
-			#y = std[i]+height+1
+			stdh = max(std[i],std[i+1])*1.5
+			print stdh
+			x = (rects[i].get_x() + rects[i].get_width())			
+			if second:
+				x = (rects[i].get_x() + rects[i].get_width())*1.5
+			y = stdh+height+2
 
-			# effort:
-			#x = rects[i].get_x() + rects[i].get_width()
-			#y = std[i]+height+50
-			
-			# time: x, y+0.2, widthB=2.0
-			# cost: x-0.12, y+0.8, widthB=1.4
-			# effort: x, y+12, widthB=2.0
-			#ax.annotate(r'\textbf{*}', xy=(x, y), xytext=(x, y+12), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, widthB=2.0, lengthB=1.2', lw=1.5))
-			# time: y+1.0
-			# cost: y+6, x-0.12
-			# effort: y+60
-			#ax.text(x-0.12,y+6,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=20)
+			widthB = "widthB="+str((rects[i].get_width()+rects[i+1].get_width())*7)
 
-	#ptime = []
-	#peffort = []
-	#pcost = [0.001,0.001,0.001]
-	#autolabel_star(rectsA,stdA,pcost)
+			if twostar:
+				ax.annotate(r'\textbf{**}', xy=(x, y), xytext=(x, y), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, '+widthB+', lengthB=1.2', lw=1.5))
+			else:			
+				ax.annotate(r'\textbf{*}', xy=(x, y), xytext=(x, y), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, '+widthB+', lengthB=1.2', lw=1.5))
+
+			ax.text(x,y+1,r"p$<$"+str(p[i]),ha='center', va='bottom', fontsize=30)
+
+	ptime = []
+	peffort = []
+	autolabel_star(rectsA,stdA,pval)
+	autolabel_star(rectsB,stdB,pval, second=True)
 	#autolabel(rectsB)
 
 	# add some text for labels, title and axes ticks
-	ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=30,labelpad=15)
-	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=30,labelpad=15)
+	ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=50,labelpad=15)
+	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=50,labelpad=15)
 	
 	plt.text(0.5, 1.08, r'\textbf{'+title+'}',
 			 horizontalalignment='center',
-			 fontsize=33,
+			 fontsize=55,
 			 transform = ax.transAxes)
 	
 	ax.set_xticks(ind+width+offset)
-	if avgOpt is not None:
-		ax.set_xticks(ind+width+width/2+offset)
 
-	xlabels = ["Table","Table + Cup"]#["T"+str(t+1) for t in range(3)]
-	ax.set_xticklabels(xlabels,10,fontsize=30)
+	xlabels = ["Table","Table + Cup"] #["T"+str(t+1) for t in range(3)]
+	ax.set_xticklabels(xlabels,10,fontsize=50)
 
 	# remove the plot frame lines
 	ax.spines["top"].set_visible(False)    
@@ -127,7 +124,7 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
 	
 	# set max y-limit 
 	ax.set_ylim([0,maxY])
-	ax.tick_params(labelsize=30)
+	ax.tick_params(labelsize=50)
 
 	# set padding for x and y tick labels
 	ax.tick_params(direction='out', pad=2)
@@ -136,354 +133,18 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, avgOpt=None):
 	ax.xaxis.set_ticks_position('none') 
 	ax.yaxis.set_ticks_position('none') 		
 
-	if avgOpt is not None:		
-		leg = ax.legend((rectsA_cup, rectsA_table, rectsB_cup, rectsB_table, rectsOpt_cup, rectsOpt_table), (r'\textbf{Update-All: cup}', r'\textbf{Update-ALL: table}', r'\textbf{Update-ONE: cup}', r'\textbf{Update-ONE: table}', r'\textbf{Desired: cup}', r'\textbf{Desired: table}'), fontsize=20)
-		#leg = ax.legend((rectsA_T1, rectsA_T2, rectsB_T1, rectsB_T2, rectsOpt_T1, rectsOpt_T2), (r'\textbf{Update-All: Table}', r'\textbf{Update-All: Table+Cup}' r'\textbf{Update-One: Table}', r'\textbf{Update-One: Table+Cup}', r'\textbf{Desired: Table}', r'\textbf{Desired: Table+Cup}'), fontsize=20)
-	else: 
-		leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{Update-All}', r'\textbf{Update-One}'), fontsize=23)
+	
+	leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
 
 	leg.get_frame().set_linewidth(0.0)
 	plt.show()
 
 	return fig
 
-def plotting_regret(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY):
-	ind = np.arange(2)  # the x locations for the groups
-	width = 0.45       # the width of the bars
-	offset = 0.15
-
-	# colors
-	blackC = "black"	#(214/255., 39/255., 40/255.)
-	greyC = "grey"		#(44/255., 160/255., 44/255.)
-	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
-	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
-
-	# fonts
-	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-	rc('text', usetex=True)
-
-	fig, ax = plt.subplots()
-
-
-	width = 0.25
-	"""	
-	rectsA_cup = ax.bar(ind+offset, avgA[:,0], width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsA_table = ax.bar(ind+offset, avgA[:,1], width, color=greyC, yerr=stdA, ecolor='k', edgecolor='#272727',hatch="/",linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsB_cup = ax.bar(ind+offset+width, avgB[:,0], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsB_table = ax.bar(ind+offset+width, avgB[:,1], width, color=orangeC, yerr=stdB, ecolor='k',linewidth=0.5, edgecolor='#272727',hatch="/",error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-
+def plotting_overtime(methodA, methodB, stdevA, stdevB):
 	"""
-	rectsA_cup = ax.bar(ind+offset, avgA[:,0], width, color=greyC, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsA_table = ax.bar(ind+offset, avgA[:,1], width, color=greyC, ecolor='k', edgecolor='#272727',hatch="/",linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsB_cup = ax.bar(ind+offset+width, avgB[:,0], width, color=orangeC, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsB_table = ax.bar(ind+offset+width, avgB[:,1], width, color=orangeC, ecolor='k',linewidth=0.5, edgecolor='#272727',hatch="/",error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-
-	def autolabel(rects):
-		"""
-		Attach a text label above each bar displaying its height
-		"""
-		for rect in rects:
-			height = rect.get_height()
-			ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,'%.2f' % 
-					height,ha='center', va='bottom', fontsize=15)
-
-	# add some text for labels, title and axes ticks
-	ax.set_ylabel(r'\textbf{'+ylabel+'}',fontsize=30,labelpad=15)
-	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=30,labelpad=15)
-	
-	plt.text(0.5, 1.08, r'\textbf{'+title+'}',
-			 horizontalalignment='center',
-			 fontsize=33,
-			 transform = ax.transAxes)
-	
-	ax.set_xticks(ind+width+offset)
-	ax.set_xticks(ind+width+width/2+offset)
-
-	xlabels = ["Table","Table + Cup"]#["T"+str(t+1) for t in range(3)]
-	ax.set_xticklabels(xlabels,10,fontsize=30)
-
-	# draw horizotal line at y=0
-	#ax.axhline(y=0, color='k', linestyle='-')
-
-	# remove the plot frame lines
-	ax.spines["top"].set_visible(False)    
-	ax.spines["right"].set_visible(False)      
-	
-	# set max y-limit 
-	ax.set_ylim([0,maxY])
-	ax.tick_params(labelsize=30)
-
-	# set padding for x and y tick labels
-	ax.tick_params(direction='out', pad=2)
-
-	# ensure that the axis ticks only show up on left of the plot.  
-	ax.xaxis.set_ticks_position('none') 
-	ax.yaxis.set_ticks_position('none') 		
-
-	leg = ax.legend((rectsA_cup, rectsA_table, rectsB_cup, rectsB_table), (r'\textbf{Update-All: cup}', r'\textbf{Update-ALL: table}', r'\textbf{Update-ONE: cup}', r'\textbf{Update-ONE: table}'), fontsize=20)
-	leg.get_frame().set_linewidth(0.0)
-	plt.show()
-
-	return fig
-
-def plot_taskEffort(saveFig=False):
+	plots the metric over time for each method
 	"""
-	Takes all participant data files and produces bar chart
-	comparing average force exerted by each participant for each task
-	----
-	saveFig 	if True, saves final plot
-	"""
-	filename = "metrics_obj.p"
-	metrics = get_pickled_metrics(filename)
-	# store avg for task 1,2
-	sumA = [0.0,0.0]
-	sumB = [0.0,0.0]
-
-	pplA = [[0.0]*NUM_PPL, [0.0]*NUM_PPL]
-	pplB = [[0.0]*NUM_PPL, [0.0]*NUM_PPL]
-	for ID in metrics.keys():
-		for task in metrics[ID]:
-			trialAvgA = 0.0
-			trialAvgB = 0.0
-			for trial in metrics[ID][task]:
-				trialAvgA += metrics[ID][task][trial]["A"][9]
-				trialAvgB += metrics[ID][task][trial]["B"][9]
-			trialAvgA /= 2.0
-			trialAvgB /= 2.0
-			sumA[task-1] += trialAvgA
-			sumB[task-1] += trialAvgB
-
-			pplA[task-1][ID] = trialAvgA
-			pplB[task-1][ID] = trialAvgB
-	avgA = [a/NUM_PPL for a in sumA]
-	stdA = [np.std(pplA[0]), np.std(pplA[1])]
-	avgB = [b/NUM_PPL for b in sumB]
-	stdB = [np.std(pplB[0]), np.std(pplB[1])]
-
-	# plot data
-	xlabel = "Task"
-	ylabel = "Total Effort (Nm)"
-	title = "Average Total Human Effort"	
-	maxY = 400	
-	fig =plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
-
-	if saveFig:
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		datapath = here + subdir
-		fig.savefig(datapath+"taskEffort.pdf", bbox_inches="tight")
-		print "Saved effort figure." 
-
-def plot_taskEffortTime(saveFig=False):
-	"""
-	Plot average amount of interaction time for each task, for each method.
-	"""
-	filename = "metrics_obj.p"
-	metrics = get_pickled_metrics(filename)
-	# store avg for task 1,2
-	sumA = [0.0,0.0]
-	sumB = [0.0,0.0]
-
-	pplA = [[0.0]*NUM_PPL, [0.0]*NUM_PPL]
-	pplB = [[0.0]*NUM_PPL, [0.0]*NUM_PPL]
-	for ID in metrics.keys():
-		for task in metrics[ID]:
-			trialAvgA = 0.0
-			trialAvgB = 0.0
-			for trial in metrics[ID][task]:
-				trialAvgA += metrics[ID][task][trial]["A"][10]
-				trialAvgB += metrics[ID][task][trial]["B"][10]
-			trialAvgA /= 2.0
-			trialAvgB /= 2.0
-			sumA[task-1] += trialAvgA
-			sumB[task-1] += trialAvgB
-
-			pplA[task-1][ID] = trialAvgA
-			pplB[task-1][ID] = trialAvgB
-	avgA = [a/NUM_PPL for a in sumA]
-	stdA = [np.std(pplA[0]), np.std(pplA[1])]
-	avgB = [b/NUM_PPL for b in sumB]
-	stdB = [np.std(pplB[0]), np.std(pplB[1])]
-
-	# plot data
-	xlabel = "Task"
-	ylabel = "Interact Time (s)"
-	title = "Average Total Interaction Time"	
-	maxY = 5.0
-	fig = plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY)
-
-	if saveFig:
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		datapath = here + subdir
-		fig.savefig(datapath+"taskTime.pdf", bbox_inches="tight")
-		print "Saved time figure."
-
-def plot_taskCost(saveFig=False):
-	"""
-	TODO Need to think about how to do this for 2 task costs
-	"""
-	filename = "metrics_obj.p"
-	metrics = get_pickled_metrics(filename)
-	# store avg for task 1,2
-
-	# stores optimal cup,table costs for task 1 and task 2
-	optimal = np.array([[0.0,0.0],[0.0,0.0]])
-	sumA = np.array([[0.0,0.0],[0.0,0.0]])
-	sumB = np.array([[0.0,0.0],[0.0,0.0]])
-
-	pplA = np.array([[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
-	pplB = np.array([[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
-
-	for ID in metrics.keys():
-		for task in metrics[ID]:
-			trialAvgA = [0.0,0.0] # cup, table
-			trialAvgB = [0.0,0.0] # cup, table
-			for trial in metrics[ID][task]:
-				trialAvgA[0] += metrics[ID][task][trial]["A"][1] #cup for method A
-				trialAvgA[1] += metrics[ID][task][trial]["A"][2] #table for method B
-				trialAvgB[0] += metrics[ID][task][trial]["B"][1] 
-				trialAvgB[1] += metrics[ID][task][trial]["B"][2] 
-
-			# get optimal cup and table cost for current task
-			optimal[task-1][0] = metrics[ID][task][1]["B"][4] #cup
-			optimal[task-1][1] = metrics[ID][task][1]["B"][5] #table
-
-			trialAvgA[0] /= 2.0
-			trialAvgA[1] /= 2.0
-			trialAvgB[0] /= 2.0
-			trialAvgB[1] /= 2.0
-			sumA[task-1][0] += trialAvgA[0]
-			sumA[task-1][1] += trialAvgA[1]
-			sumB[task-1][0] += trialAvgB[0]
-			sumB[task-1][1] += trialAvgB[1]
-
-			pplA[ID][task-1][0] = trialAvgA[0]
-			pplA[ID][task-1][1] = trialAvgA[1]
-			pplB[ID][task-1][0] = trialAvgB[0]
-			pplB[ID][task-1][1] = trialAvgB[1]
-
-	avgA = np.array([[0.0,0.0]]*2)
-	avgB = np.array([[0.0,0.0]]*2)
-	stdA = np.array([[0.0,0.0]]*2)
-	stdB = np.array([[0.0,0.0]]*2)
-
-	avgA[0][0] = sumA[0][0]/NUM_PPL
-	avgA[0][1] = sumA[0][1]/NUM_PPL
-	avgA[1][0] = sumA[1][0]/NUM_PPL
-	avgA[1][1] = sumA[1][1]/NUM_PPL
-
-	print sumA[0][0]/NUM_PPL
-	print sumA[1][0]/NUM_PPL
-
-	avgB[0][0] = sumB[0][0]/NUM_PPL
-	avgB[0][1] = sumB[0][1]/NUM_PPL
-	avgB[1][0] = sumB[1][0]/NUM_PPL
-	avgB[1][1] = sumB[1][1]/NUM_PPL
-
-	stdA[0][0] = np.std(pplA[:,0,0])
-	stdA[0][1] = np.std(pplA[:,0,1])
-	stdA[1][0] = np.std(pplA[:,1,0])
-	stdA[1][1] = np.std(pplA[:,1,1])
-
-	stdB[0][0] = np.std(pplB[:,0,0])
-	stdB[0][1] = np.std(pplB[:,0,1])
-	stdB[1][0] = np.std(pplB[:,1,0])
-	stdB[1][1] = np.std(pplB[:,1,1])
-
-	print avgA
-
-	xlabel = "Task"
-	ylabel = r"Cost Value"
-	title = r"Average Cost Across Tasks"	
-	maxY = 200.0
-	fig = plotting(avgA,avgB,stdA,stdB,xlabel,ylabel,title,maxY,optimal)
-
-	if saveFig:
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		datapath = here + subdir
-		fig.savefig(datapath+"taskCost.pdf", bbox_inches="tight")
-		print "Saved cost figure."
-
-def plot_avgRegret(saveFig=True):
-	"""
-	Plots the avg regret across participants for all tasks.
-	"""
-	filename = "metrics_obj.p"
-	metrics = get_pickled_metrics(filename)
-
-	# stores total cup,table regret for task 1 and task 2
-	sumA = np.array([[0.0,0.0],[0.0,0.0]])
-	sumB = np.array([[0.0,0.0],[0.0,0.0]])
-
-	pplA = np.array([[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
-	pplB = np.array([[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
-
-	for ID in metrics.keys():
-		for task in metrics[ID]:
-			trialAvgA = [0.0,0.0] # cup, table
-			trialAvgB = [0.0,0.0] # cup, table
-			for trial in metrics[ID][task]:
-				trialAvgA[0] += np.fabs(metrics[ID][task][trial]["A"][16])  #cup regret for method A
-				trialAvgA[1] += np.fabs(metrics[ID][task][trial]["A"][17])  #table regret for method B
-				trialAvgB[0] += np.fabs(metrics[ID][task][trial]["B"][16])  
-				trialAvgB[1] += np.fabs(metrics[ID][task][trial]["B"][17])  
-
-			trialAvgA[0] /= 2.0
-			trialAvgA[1] /= 2.0
-			trialAvgB[0] /= 2.0
-			trialAvgB[1] /= 2.0
-			sumA[task-1][0] += trialAvgA[0]
-			sumA[task-1][1] += trialAvgA[1]
-			sumB[task-1][0] += trialAvgB[0]
-			sumB[task-1][1] += trialAvgB[1]
-
-			pplA[ID][task-1][0] = trialAvgA[0]
-			pplA[ID][task-1][1] = trialAvgA[1]
-			pplB[ID][task-1][0] = trialAvgB[0]
-			pplB[ID][task-1][1] = trialAvgB[1]
-
-	avgA = np.array([[0.0,0.0]]*2)
-	avgB = np.array([[0.0,0.0]]*2)
-	stdA = np.array([[0.0,0.0]]*2)
-	stdB = np.array([[0.0,0.0]]*2)
-
-	avgA[0][0] = sumA[0][0]/NUM_PPL
-	avgA[0][1] = sumA[0][1]/NUM_PPL
-	avgA[1][0] = sumA[1][0]/NUM_PPL
-	avgA[1][1] = sumA[1][1]/NUM_PPL
-
-	avgB[0][0] = sumB[0][0]/NUM_PPL
-	avgB[0][1] = sumB[0][1]/NUM_PPL
-	avgB[1][0] = sumB[1][0]/NUM_PPL
-	avgB[1][1] = sumB[1][1]/NUM_PPL
-
-	stdA[0][0] = np.std(pplA[:,0,0])
-	stdA[0][1] = np.std(pplA[:,0,1])
-	stdA[1][0] = np.std(pplA[:,1,0])
-	stdA[1][1] = np.std(pplA[:,1,1])
-
-	stdB[0][0] = np.std(pplB[:,0,0])
-	stdB[0][1] = np.std(pplB[:,0,1])
-	stdB[1][0] = np.std(pplB[:,1,0])
-	stdB[1][1] = np.std(pplB[:,1,1])
-
-	print "avgA: " + str(avgA)
-	print "avgB: " + str(avgB)
-
-	xlabel = "Task"
-	ylabel = r"Regret"
-	title = r"Average Regret Across Tasks"	
-	maxY = 50.0
-	fig = plotting_regret(np.fabs(avgA),np.fabs(avgB),stdA,stdB,xlabel,ylabel,title,maxY)
-
-	if saveFig:
-		here = os.path.dirname(os.path.realpath(__file__))
-		subdir = "/data/experimental/"
-		datapath = here + subdir
-		fig.savefig(datapath+"regret.pdf", bbox_inches="tight")
-		print "Saved cost figure."
 
 def augment_weights(time, weights):
 	"""
@@ -613,13 +274,286 @@ def plot_weights(task, saveFig=False):
 		f.savefig(datapath+"task"+str(task)+"Weights.pdf", bbox_inches="tight")
 		print "Saved weights figure."
 
+def plot_cupTableDiffFinal(saveFig=False):
+	"""
+	Produces two plots, one for the cupDiff and one for the tableDiff metric
+	"""
+	filename = "metrics_obj.p"
+	obj = get_pickled_metrics(filename)
+
+	# for keeping average of each feature, for each method, and for each task
+	cupDiffAvg = np.array([[0.0, 0.0],[0.0,0.0]]) # [method all --> [avg for task 1, task 2], method one --> [avg for task 1, task 2]]
+	tableDiffAvg = np.array([[0.0, 0.0],[0.0,0.0]]) 
+
+	# for computing stddev 
+	pplCupALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL) # trial 1 --> [task 1, task 2], trial 2 --> [task 1, task 2]
+	pplCupONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+	pplTableALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+	pplTableONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+
+	stdCup = np.array([[0.0,0.0]]*2)
+	stdTable = np.array([[0.0,0.0]]*2)
+
+	for ID in obj.keys():
+		for task in obj[ID]:
+			for trial in [1,2]:
+				cup_all = obj[ID][task][trial]["A"][17]
+				cup_one = obj[ID][task][trial]["B"][17]
+				table_all = obj[ID][task][trial]["A"][18]
+				table_one = obj[ID][task][trial]["B"][18]
+
+				cupDiffAvg[0][task-1] += cup_all
+				cupDiffAvg[1][task-1] += cup_one
+
+				tableDiffAvg[0][task-1] += table_all
+				tableDiffAvg[1][task-1] += table_one
+
+				pplCupALL[ID][trial-1][task-1] = cup_all
+				pplCupONE[ID][trial-1][task-1] = cup_one
+				pplTableALL[ID][trial-1][task-1] = table_all
+				pplTableONE[ID][trial-1][task-1] = table_one
+
+	#print "pplCup: " + str(pplCup)
+	# average by number of participants
+	for method in range(2):
+		for task in range(2):
+			cupDiffAvg[method][task] /= NUM_PPL*2 # because 2 trials
+			tableDiffAvg[method][task] /= NUM_PPL*2
+			
+			#c = np.reshape(pplCup[:,method,:,task], NUM_PPL)
+			if method == 0: # all method
+				stdCup[method][task] = np.std(pplCupALL[:,:,task])/np.sqrt(NUM_PPL*2*2) # because 2 tasks, 2 trials (per method)
+				stdTable[method][task] = np.std(pplTableALL[:,:,task])/np.sqrt(NUM_PPL*2*2)
+			else: # one method
+				stdCup[method][task] = np.std(pplCupONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+				stdTable[method][task] = np.std(pplTableONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+		
+	print stdCup
+	xlabel = "Task"
+	ylabel = r"CupDiffFinal"
+	title = r"\textit{CupDiffFinal}: Cup Feature Difference from Ideal"	
+	maxY = 50.0
+	fig = plotting(cupDiffAvg[0], cupDiffAvg[1], stdCup[0], stdCup[1], xlabel, ylabel, title, maxY, pval=[0.01,0.01])
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		fig.savefig(datapath+"cupDiff.pdf", bbox_inches="tight")
+		print "Saved cupDiff figure."
+
+	xlabel = "Task"
+	ylabel = r"TableDiffFinal"
+	title = r"\textit{TableDiffFinal}: Table Feature Difference from Ideal"	
+	maxY = 20.0
+	fig = plotting(tableDiffAvg[0], tableDiffAvg[1], stdTable[0], stdTable[1], xlabel, ylabel, title, maxY, twostar=True, pval=[0.001,0.001])
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		fig.savefig(datapath+"tableDiff.pdf", bbox_inches="tight")
+		print "Saved tableDiff figure."
+
+def plot_dotOverTime(saveFig=False):
+	"""
+	Produces plot over time of the dot product
+	"""
+	weightData = data_io.parse_exp_data("weights")
+
+	times = np.arange(0.0, 20.0, 0.1)
+	print "times: " + str(times)
+	dot_ALL = {}
+	dot_ONE = {}
+	for task in [1,2]:
+		dot_ALL[task] = {}
+		dot_ONE[task] = {}
+		for ID in range(NUM_PPL):
+			dot_ALL[task][ID] = {}
+			dot_ONE[task][ID] = {}
+			#for t in times:
+			#	dot_ALL[task][ID][t] = None#[0.0,0.0] #trial 1, trial 2
+			#	dot_ONE[task][ID][t] = None#[0.0,0.0] 
+
+	aug_times = None
+	# get weight data
+	for ID in weightData.keys():
+		for task in weightData[ID]:
+			if task == 1:
+				ideal_w = np.array([0.0,1.0])
+			elif task == 2:
+				ideal_w = np.array([1.0,1.0])
+
+			#for trial in weightData[ID][task]:
+			for method in ["A", "B"]:
+				data1 = weightData[ID][task][1][method]
+				data2 = weightData[ID][task][2][method]
+
+				timestamp1 = data1[:,0:1]
+				timestamp2 = data2[:,0:1]
+				weights1 = data1[:,1:len(data1)+1]
+				weights2 = data2[:,1:len(data2)+1]
+
+				(aug_time1, aug_cup1, aug_table1) = augment_weights(timestamp1, weights1)
+				(aug_time2, aug_cup2, aug_table2) = augment_weights(timestamp2, weights2)
+				print "aug_time1: " + str(aug_time1)
+				print "aug_time2: " + str(aug_time2)
+				for t in range(len(aug_time1)):
+					if aug_time1[t] not in dot_ALL[task][ID]:
+						dot_ALL[task][ID][aug_time1[t]] = [0.0,0.0]
+					if aug_time1[t] not in dot_ONE[task][ID]:
+						dot_ONE[task][ID][aug_time1[t]] = [0.0,0.0]
+
+					w1 = np.array([aug_cup1[t],aug_table1[t]]) 
+					w2 = np.array([aug_cup2[t],aug_table2[t]]) 
+					curr_dot = [np.dot(w1,ideal_w), np.dot(w2,ideal_w)] # dot prod for trial 1 and trial 2
+					if method == "A":
+						#print "w1: " + str(w1)
+						#print "w2: " + str(w2)
+						dot_ALL[task][ID][aug_time1[t]] = curr_dot
+						print "dot all: " + str(curr_dot)
+					else:
+						dot_ONE[task][ID][aug_time1[t]] = curr_dot
+						print "dot one: " + str(curr_dot)
+
+				aug_times = aug_time1
+
+	# now do the averaging over time across each participant
+	avgALLT1 = [0.0]*len(times)
+	avgONET1 = [0.0]*len(times)
+	avgALLT2 = [0.0]*len(times)
+	avgONET2 = [0.0]*len(times)
+
+	idx = 0
+	for t in aug_times:
+		aAllt1 = 0.0
+		aOnet1 = 0.0
+		aAllt2 = 0.0
+		aOnet2 = 0.0
+		for ID in range(NUM_PPL):
+			print "in avg: dot all: " + str(dot_ALL[1][ID][t])
+			aAllt1 += dot_ALL[1][ID][t][0] + dot_ALL[1][ID][t][1]
+			aOnet1 += dot_ONE[1][ID][t][0] + dot_ONE[1][ID][t][1]
+			aAllt2 += dot_ALL[2][ID][t][0] + dot_ALL[2][ID][t][1]
+			aOnet2 += dot_ONE[2][ID][t][0] + dot_ONE[2][ID][t][1]
+		print aAllt1
+		avgALLT1[idx] = aAllt1/(NUM_PPL*2)
+		avgONET1[idx] = aOnet1/(NUM_PPL*2)
+		avgALLT2[idx] = aAllt2/(NUM_PPL*2)
+		avgONET2[idx] = aOnet2/(NUM_PPL*2)
+		idx += 1
+
+	# colors
+	blackC = "black"	#(214/255., 39/255., 40/255.)
+	greyC = "grey"		#(44/255., 160/255., 44/255.)
+	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
+	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
+
+	# fonts
+	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+	rc('text', usetex=True)
+	
+	fig, ax = plt.subplots()
+
+	plt.text(0.5, 1.08, r'\textbf{Task 1 \textit{DotAvg} Over Duration of Trajectory}',
+			 horizontalalignment='center',
+			 fontsize=35,
+			 transform = ax.transAxes)
+
+
+	#ax.set_xticks(ind+width+offset)
+
+	#xlabels = "Time (s)" #["T"+str(t+1) for t in range(3)]
+	#ax.set_xticklabels(xlabels,10,fontsize=50)
+
+	plt.ylabel('DotAvg',fontsize=50)
+	plt.xlabel('Time (s)',fontsize=50)
+
+	# remove the plot frame lines
+	ax.spines["top"].set_visible(False)    
+	ax.spines["right"].set_visible(False)      
+	
+	ax.tick_params(labelsize=50)
+	# set padding for x and y tick labels
+	ax.tick_params(direction='out', pad=2)
+
+	# ensure that the axis ticks only show up on left of the plot.  
+	ax.xaxis.set_ticks_position('none') 
+	ax.yaxis.set_ticks_position('none') 		
+
+	# plot the average dot product over time
+	allT1 = ax.plot(times, avgALLT1, '-o', color=greyC, label=r'\textbf{All-at-Once}')
+	oneT1 = ax.plot(times, avgONET1, '-o', color=orangeC, label=r'\textbf{One-at-a-Time}')
+
+	# TODO THIS ISN'T DONE
+	allT1.fill_between(x, y-error, y+error)
+	oneT1.fill_between(x, y-error, y+error)
+
+	leg = ax.legend() #ax.legend((allT1, oneT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
+
+	plt.show()
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		fig.savefig(datapath+"dotAvgTime.pdf", bbox_inches="tight")
+		print "Saved dotAvgTime figure."
+
+#--------- OprenRAVE plotting --------#
+
+def plot_taskOpenrave(task):
+	"""
+	Plots the default and ideal trajectory for the task.
+	"""
+
+	blackC = [0.2,0.2,0.2] #[0,0,0] 	
+	greyC =  [0.5,0.5,0.5]		
+	blueC = [75/255.0,171/255.0,197/255.]
+	orangeC = [247/255.,149/255.,69/255.0] 
+
+	# total traj time
+	T = 20.0
+
+	ideal_w = [0.0,0.0]
+	if task == 1:
+		ideal_w = [0.0,1.0]
+	elif task == 2:
+		ideal_w = [1.0,1.0]
+
+	if task == 2:
+		# if two features are wrong, initialize the starting config badly (tilted cup)
+		pick = copy.copy(pick_basic)
+		pick[-1] = 200.0
+	else:
+		pick = copy.copy(pick_basic) 
+	place = copy.copy(place_lower)
+
+	start = np.array(pick)*(math.pi/180.0)
+	goal = np.array(place)*(math.pi/180.0)
+
+	plan = trajopt_planner.Planner(EXP_TASK, demo=False, featMethod="MAX", numFeat=task)
+
+	# --- ideal traj --- #
+	# choose 0.1 as step size to match real traj
+	plan.replan(start, goal, ideal_w, 0.0, T, 0.1, seed=None)	
+	# plot ideal trajectory
+	plotCupTraj(plan.env,plan.robot,plan.bodies,plan.waypts,color=blueC,increment=20)
+
+	# --- default traj --- #
+	default_w = [0.0,0.0]
+	# choose 0.1 as step size to match real traj
+	plan.replan(start, goal, default_w, 0.0, T, 0.1, seed=None)	
+	# plot ideal trajectory
+	plotCupTraj(plan.env,plan.robot,plan.bodies,plan.waypts,color=blackC,increment=20)
+
+	time.sleep(30)
 
 if __name__ == '__main__':
-	#plot_taskEffort(saveFig=True)
-	#plot_taskEffortTime(saveFig=True)
-	#plot_taskCost(saveFig=True)
-	
-	#task = 1
-	#plot_weights(task, saveFig=True)
 
-	plot_avgRegret(saveFig=True)
+	# --- for plotting trajectory default and ideal ---- #
+	#task = 1
+	#plot_taskOpenrave(task)
+
+	#plot_cupTableDiffFinal(True)
+	plot_dotOverTime(True)
