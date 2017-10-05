@@ -135,8 +135,8 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, twostar=False,
 
 	
 	leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
-
 	leg.get_frame().set_linewidth(0.0)
+
 	plt.show()
 
 	return fig
@@ -692,7 +692,6 @@ def plot_undoingObjSubj(saveFig=False):
 	rectsALLT2 = t2away.bar(ind+offset, avgAllT2, width, color=greyC, yerr=stdT2[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsONET2 = t2away.bar(ind+width+offset, avgOneT2, width, color=orangeC, yerr=stdT2[1], ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 
-
 	# plot the SUBJECTIVE METRICS
 	t1subj.set_ylim([0,7])
 	t2subj.set_ylim([0,7])
@@ -781,6 +780,247 @@ def plot_undoingObjSubj(saveFig=False):
 		fig.savefig(datapath+"awayUndoing.pdf", bbox_inches="tight")
 		print "Saved awayUndoing figure."
 
+def plot_dotF_cupDiff_tableDiff(saveFig=False):
+	"""
+	Makes 3 side-by-side bar charts of dotfinal, cupdiff, tablediff plots
+	"""
+	idxCup = 17
+	idxTable = 18
+	(cupAvg,tableAvg,stdCup,stdTable) = getAvgs_Stds(idxCup, idxTable, oneMetric=False)
+
+	idxDotF = 12
+	(dotFAvg,stdDotF) = getAvgs_Stds(idxDotF, oneMetric=True)
+
+	# ------- PLOTTING ---------#
+
+	ind = np.arange(2)  # the x locations for the groups
+	ind[1] = 2
+	width = 0.45       # the width of the bars
+	offset = 0.2
+
+	# colors
+	blackC = "black"	#(214/255., 39/255., 40/255.)
+	greyC = "grey"		#(44/255., 160/255., 44/255.)
+	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
+	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
+
+	fig, (dotF, cupDiffF, tableDiffF) = plt.subplots(1, 3, figsize=(25,15))
+
+	# plot cupDiffFinal bar chart
+	cupDiffFALL = cupDiffF.bar(ind+offset, cupAvg[0], width, color=greyC, yerr=stdCup[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	cupDiffFONE = cupDiffF.bar(ind+width+offset, cupAvg[1], width, color=orangeC, yerr=stdCup[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+	tableDiffFALL = tableDiffF.bar(ind+offset, tableAvg[0], width, color=greyC, yerr=stdTable[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	tableDiffFONE = tableDiffF.bar(ind+width+offset, tableAvg[1], width, color=orangeC, yerr=stdTable[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+	dotFALL = dotF.bar(ind+offset, dotFAvg[0], width, color=greyC, yerr=stdDotF[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	dotFONE = dotF.bar(ind+width+offset, dotFAvg[1], width, color=orangeC, yerr=stdDotF[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+	format_subplot(cupDiffF, cupDiffFALL, cupDiffFONE, xlabel="Tasks", ylabel="CupDiffFinal", title="", indX=ind)
+	format_subplot(tableDiffF, tableDiffFALL, tableDiffFONE, xlabel="Tasks", ylabel="TableDiffFinal", title="", indX=ind)
+	format_subplot(dotF, dotFALL, dotFONE, xlabel="Tasks", ylabel="DotFinal", title="", indX=ind)
+
+	leg = fig.legend((cupDiffFALL[0], cupDiffFONE[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), ncol=2, fontsize=30, loc='upper center',bbox_to_anchor=(0.65, 1.08))
+	leg.get_frame().set_linewidth(0.0)
+	leg.get_frame().set_alpha(0)
+
+
+	pval1 = [0.01,0.01]
+	pval2 = [0.001,0.001]
+	autolabel_star(cupDiffF, cupDiffFALL, stdCup[0], pval1)
+	autolabel_star(cupDiffF, cupDiffFONE, stdCup[1], pval1, second=True)
+	autolabel_star(tableDiffF, tableDiffFALL, stdTable[0],pval2, twostar=True)
+	autolabel_star(tableDiffF, tableDiffFONE, stdTable[1],pval2, twostar=True, second=True)
+	autolabel_star(dotF, dotFALL, stdDotF[0], pval2, twostar=True)
+	autolabel_star(dotF, dotFONE, stdDotF[1], pval2, twostar=True, second=True)
+
+	plt.title(r'\textbf{Final Learned Reward Metrics}', fontsize=50, x=-0.7, y=1.2)
+	plt.subplots_adjust(left=0.12, bottom=None, right=1.2, top=None, wspace=0.2, hspace=None)
+
+	plt.show()
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		fig.savefig(datapath+"dotDiffFinal.pdf", bbox_inches="tight")
+		print "Saved dotDiffFinal figure."
+
+def autolabel_star(ax, rects, std, p, twostar=False, second=False):
+	"""
+	Attach a text label above each bar displaying its height
+	second means the second error plot label
+	"""
+	for i in range(0,len(rects),2):
+		height1 = rects[i].get_height()
+		height2 = rects[i+1].get_height()
+		height = max(height1,height2)
+		print "height: " + str(height)
+		stdh = max(std[i],std[i+1])*1.5
+		print stdh
+		x = (rects[i].get_x() + rects[i].get_width())			
+		if second:
+			x = (rects[i].get_x() + rects[i].get_width())*2.5
+
+		y = stdh+height
+		widthB = "widthB="+str((rects[i].get_width()+rects[i+1].get_width())*3)
+
+		if twostar:
+			yoffset = 1.2
+			ax.annotate(r'\textbf{**}', xy=(x, y+yoffset), xytext=(x, y+yoffset), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, '+widthB+', lengthB=1.2', lw=1.5))
+		else:		
+			yoffset = 1.2
+			ax.annotate(r'\textbf{*}', xy=(x, y), xytext=(x, y), xycoords='data', fontsize=25, ha='center', va='bottom',arrowprops=dict(arrowstyle='-[, '+widthB+', lengthB=1.2', lw=1.5))
+
+		ax.text(x,y+yoffset,r"p$<$"+str(p[i]), ha='center', va='bottom', fontsize=30)
+
+
+def autolabel(ax, rects):
+	"""
+	Attach a text label above each bar displaying its height
+	"""
+	for rect in rects:
+		height = rect.get_height()
+		ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,'%.2f' % 
+				height,ha='center', va='bottom', fontsize=15)
+
+
+def format_subplot(ax, rectsA, rectsB, xlabel, ylabel, title, indX=[0,0]):
+	"""
+	Sets up subplot (named ax) with al of the standard font n stuff
+	"""
+	width = 0.45       # the width of the bars
+	offset = 0.15
+
+	# fonts
+	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+	rc('text', usetex=True)
+
+	# add some text for labels, title and axes ticks
+	ax.set_ylabel(r'\textit{\textbf{'+ylabel+'}}',fontsize=30,labelpad=15)
+	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=30,labelpad=15)
+	
+	plt.text(0.5, 1.08, r'\textbf{'+title+'}',
+			 horizontalalignment='center',
+			 fontsize=30,
+			 transform = ax.transAxes)
+	
+	ax.set_xticks(indX+width+offset)
+
+	xlabels = ["Table","Table + Cup"] #["T"+str(t+1) for t in range(3)]
+	ax.set_xticklabels(xlabels,10,fontsize=22)
+
+	# remove the plot frame lines
+	ax.spines["top"].set_visible(False)    
+	ax.spines["right"].set_visible(False)      
+	
+	# set max y-limit 
+	#ax.set_ylim([0,maxY])
+	ax.tick_params(labelsize=30)
+
+	# set padding for x and y tick labels
+	ax.tick_params(direction='out', pad=2)
+
+	# ensure that the axis ticks only show up on left of the plot.  
+	ax.xaxis.set_ticks_position('none') 
+	ax.yaxis.set_ticks_position('none') 		
+	
+	#leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=30)
+	#leg.get_frame().set_linewidth(0.0)
+	#leg.get_frame().set_alpha(0)
+
+def getAvgs_Stds(idxCup, idxTable=None, oneMetric=False):
+	"""
+	Returns the averages and standard deviations for the Cup and Table metrics at 
+	idxCup index and idxTable index in metrics_obj. 
+	If oneMetric = True, then we are only considering one of the metrics, and 
+	return just data on that. Assume that the idxCup has the right index, and idxTable = None
+	"""
+	filename = "metrics_obj.p"
+	obj = get_pickled_metrics(filename)
+
+	if oneMetric is False:
+		# for keeping average of each feature, for each method, and for each task
+		cupAvg = np.array([[0.0, 0.0],[0.0,0.0]]) # [method all --> [avg for task 1, task 2], method one --> [avg for task 1, task 2]]
+		tableAvg = np.array([[0.0, 0.0],[0.0,0.0]]) 
+
+		# for computing stddev 
+		pplCupALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL) # trial 1 --> [task 1, task 2], trial 2 --> [task 1, task 2]
+		pplCupONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+		pplTableALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+		pplTableONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+
+		stdCup = np.array([[0.0,0.0]]*2)
+		stdTable = np.array([[0.0,0.0]]*2)
+
+		for ID in obj.keys():
+			for task in obj[ID]:
+				for trial in [1,2]:
+					cup_all = obj[ID][task][trial]["A"][idxCup]
+					cup_one = obj[ID][task][trial]["B"][idxCup]
+					table_all = obj[ID][task][trial]["A"][idxTable]
+					table_one = obj[ID][task][trial]["B"][idxTable]
+
+					cupAvg[0][task-1] += cup_all
+					cupAvg[1][task-1] += cup_one
+
+					tableAvg[0][task-1] += table_all
+					tableAvg[1][task-1] += table_one
+
+					pplCupALL[ID][trial-1][task-1] = cup_all
+					pplCupONE[ID][trial-1][task-1] = cup_one
+					pplTableALL[ID][trial-1][task-1] = table_all
+					pplTableONE[ID][trial-1][task-1] = table_one
+
+		# average by number of participants
+		for method in range(2):
+			for task in range(2):
+				cupAvg[method][task] /= NUM_PPL*2 # because 2 trials
+				tableAvg[method][task] /= NUM_PPL*2
+			
+				if method == 0: # all method
+					stdCup[method][task] = np.std(pplCupALL[:,:,task])/np.sqrt(NUM_PPL*2*2) # because 2 tasks, 2 trials (per method)
+					stdTable[method][task] = np.std(pplTableALL[:,:,task])/np.sqrt(NUM_PPL*2*2)
+				else: # one method
+					stdCup[method][task] = np.std(pplCupONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+					stdTable[method][task] = np.std(pplTableONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+
+		return (cupAvg,tableAvg,stdCup,stdTable)
+	else:
+		# for keeping average of each feature, for each method, and for each task
+		cupAvg = np.array([[0.0, 0.0],[0.0,0.0]]) # [method all --> [avg for task 1, task 2], method one --> [avg for task 1, task 2]]
+
+		# for computing stddev 
+		pplCupALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL) # trial 1 --> [task 1, task 2], trial 2 --> [task 1, task 2]
+		pplCupONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+
+		stdCup = np.array([[0.0,0.0]]*2)
+
+		for ID in obj.keys():
+			for task in obj[ID]:
+				for trial in [1,2]:
+					cup_all = obj[ID][task][trial]["A"][idxCup]
+					cup_one = obj[ID][task][trial]["B"][idxCup]
+
+					cupAvg[0][task-1] += cup_all
+					cupAvg[1][task-1] += cup_one
+
+					pplCupALL[ID][trial-1][task-1] = cup_all
+					pplCupONE[ID][trial-1][task-1] = cup_one
+
+		# average by number of participants
+		for method in range(2):
+			for task in range(2):
+				cupAvg[method][task] /= NUM_PPL*2 # because 2 trials
+			
+				if method == 0: # all method
+					stdCup[method][task] = np.std(pplCupALL[:,:,task])/np.sqrt(NUM_PPL*2*2) # because 2 tasks, 2 trials (per method)
+				else: # one method
+					stdCup[method][task] = np.std(pplCupONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+
+		return (cupAvg,stdCup)
+		
+
 #--------- OprenRAVE plotting --------#
 
 def plot_taskOpenrave(task):
@@ -839,4 +1079,5 @@ if __name__ == '__main__':
 	# --- for plotting objective metrics --- #
 	#plot_cupTableDiffFinal(True)
 	#plot_dotOverTime(T1=False, saveFig=True)
-	plot_undoingObjSubj(saveFig=True)
+	#plot_undoingObjSubj(saveFig=True)
+	plot_dotF_cupDiff_tableDiff(True)
