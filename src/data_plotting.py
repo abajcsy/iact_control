@@ -141,10 +141,6 @@ def plotting(avgA, avgB, stdA, stdB, xlabel, ylabel, title, maxY, twostar=False,
 
 	return fig
 
-def plotting_overtime(methodA, methodB, stdevA, stdevB):
-	"""
-	plots the metric over time for each method
-	"""
 
 def augment_weights(time, weights):
 	"""
@@ -355,14 +351,15 @@ def plot_cupTableDiffFinal(saveFig=False):
 		fig.savefig(datapath+"tableDiff.pdf", bbox_inches="tight")
 		print "Saved tableDiff figure."
 
-def plot_dotOverTime(saveFig=False):
+def plot_dotOverTime(T1=True,saveFig=False):
 	"""
 	Produces plot over time of the dot product
+	Specify if you want to plot Task 1, or Task 2 and if u want to save
 	"""
 	weightData = data_io.parse_exp_data("weights")
 
 	times = np.arange(0.0, 20.0, 0.1)
-	print "times: " + str(times)
+	#print "times: " + str(times)
 	dot_ALL = {}
 	dot_ONE = {}
 	for task in [1,2]:
@@ -396,8 +393,8 @@ def plot_dotOverTime(saveFig=False):
 
 				(aug_time1, aug_cup1, aug_table1) = augment_weights(timestamp1, weights1)
 				(aug_time2, aug_cup2, aug_table2) = augment_weights(timestamp2, weights2)
-				print "aug_time1: " + str(aug_time1)
-				print "aug_time2: " + str(aug_time2)
+				#print "aug_time1: " + str(aug_time1)
+				#print "aug_time2: " + str(aug_time2)
 				for t in range(len(aug_time1)):
 					if aug_time1[t] not in dot_ALL[task][ID]:
 						dot_ALL[task][ID][aug_time1[t]] = [0.0,0.0]
@@ -411,37 +408,71 @@ def plot_dotOverTime(saveFig=False):
 						#print "w1: " + str(w1)
 						#print "w2: " + str(w2)
 						dot_ALL[task][ID][aug_time1[t]] = curr_dot
-						print "dot all: " + str(curr_dot)
+						#print "dot all: " + str(curr_dot)
 					else:
 						dot_ONE[task][ID][aug_time1[t]] = curr_dot
-						print "dot one: " + str(curr_dot)
+						#print "dot one: " + str(curr_dot)
 
 				aug_times = aug_time1
 
 	# now do the averaging over time across each participant
-	avgALLT1 = [0.0]*len(times)
-	avgONET1 = [0.0]*len(times)
-	avgALLT2 = [0.0]*len(times)
-	avgONET2 = [0.0]*len(times)
+	avgALLT1 = np.array([0.0]*len(aug_times))
+	avgONET1 = np.array([0.0]*len(aug_times))
+	avgALLT2 = np.array([0.0]*len(aug_times))
+	avgONET2 = np.array([0.0]*len(aug_times))
 
+	ALLT1 = np.array([[0.0]*NUM_PPL*2]*len(aug_times)) # time1 --> [p1/trial1, p1/trial2, p2/trial1, p2/trial2, ...], time2 --> [p1/trial1, p1/trial2, p2/trial1, p2/trial2, ...]
+	ONET1 = np.array([[0.0]*NUM_PPL*2]*len(aug_times))
+	ALLT2 = np.array([[0.0]*NUM_PPL*2]*len(aug_times))
+	ONET2 = np.array([[0.0]*NUM_PPL*2]*len(aug_times))
+	
 	idx = 0
 	for t in aug_times:
 		aAllt1 = 0.0
 		aOnet1 = 0.0
 		aAllt2 = 0.0
 		aOnet2 = 0.0
+		idx2 = 0
 		for ID in range(NUM_PPL):
-			print "in avg: dot all: " + str(dot_ALL[1][ID][t])
 			aAllt1 += dot_ALL[1][ID][t][0] + dot_ALL[1][ID][t][1]
 			aOnet1 += dot_ONE[1][ID][t][0] + dot_ONE[1][ID][t][1]
 			aAllt2 += dot_ALL[2][ID][t][0] + dot_ALL[2][ID][t][1]
 			aOnet2 += dot_ONE[2][ID][t][0] + dot_ONE[2][ID][t][1]
-		print aAllt1
+
+			ALLT1[idx][idx2] = dot_ALL[1][ID][t][0]
+			ALLT1[idx][idx2+1] = dot_ALL[1][ID][t][1]
+			ONET1[idx][idx2] = dot_ONE[1][ID][t][0]
+			ONET1[idx][idx2+1] = dot_ONE[1][ID][t][1]
+			ALLT2[idx][idx2] = dot_ALL[2][ID][t][0]
+			ALLT2[idx][idx2+1] = dot_ALL[2][ID][t][1]
+			ONET2[idx][idx2] = dot_ONE[2][ID][t][0]
+			ONET2[idx][idx2+1] = dot_ONE[2][ID][t][1]
+			print "aALLt1: " + str(aAllt1)
+			print "ALLT1[t][idx2]: " + str(ALLT1[t][idx2]) + ", " + str(ALLT1[t][idx2+1])
+			idx2 += 2
+		
+		#print "ALLT1["+str(t)+"]: " + str(ALLT1[t])
+
 		avgALLT1[idx] = aAllt1/(NUM_PPL*2)
 		avgONET1[idx] = aOnet1/(NUM_PPL*2)
 		avgALLT2[idx] = aAllt2/(NUM_PPL*2)
 		avgONET2[idx] = aOnet2/(NUM_PPL*2)
 		idx += 1
+
+	#print "ALLT1: " + str(ALLT1)
+	allT1error = np.array([0.0]*len(aug_times))
+	oneT1error = np.array([0.0]*len(aug_times))
+	allT2error = np.array([0.0]*len(aug_times))
+	oneT2error = np.array([0.0]*len(aug_times))
+
+	# compute std error
+	for t in range(len(aug_times)):
+		print "ALLT1["+str(t)+"]: " + str(ALLT1[t])
+		allT1error[t] = np.std(ALLT1[t])/np.sqrt(NUM_PPL*2)
+		oneT1error[t] = np.std(ONET1[t])/np.sqrt(NUM_PPL*2)
+		allT2error[t] = np.std(ALLT2[t])/np.sqrt(NUM_PPL*2)
+		oneT2error[t] = np.std(ONET2[t])/np.sqrt(NUM_PPL*2)
+	print "allT1error: " + str(allT1error)
 
 	# colors
 	blackC = "black"	#(214/255., 39/255., 40/255.)
@@ -454,12 +485,6 @@ def plot_dotOverTime(saveFig=False):
 	rc('text', usetex=True)
 	
 	fig, ax = plt.subplots()
-
-	plt.text(0.5, 1.08, r'\textbf{Task 1 \textit{DotAvg} Over Duration of Trajectory}',
-			 horizontalalignment='center',
-			 fontsize=35,
-			 transform = ax.transAxes)
-
 
 	#ax.set_xticks(ind+width+offset)
 
@@ -481,15 +506,37 @@ def plot_dotOverTime(saveFig=False):
 	ax.xaxis.set_ticks_position('none') 
 	ax.yaxis.set_ticks_position('none') 		
 
-	# plot the average dot product over time
-	allT1 = ax.plot(times, avgALLT1, '-o', color=greyC, label=r'\textbf{All-at-Once}')
-	oneT1 = ax.plot(times, avgONET1, '-o', color=orangeC, label=r'\textbf{One-at-a-Time}')
+	ax.set_ylim([0.0,2.4])
+	ax.set_xlim([0.0,19])
 
-	# TODO THIS ISN'T DONE
-	allT1.fill_between(x, y-error, y+error)
-	oneT1.fill_between(x, y-error, y+error)
+	if T1:
+		plt.text(0.5, 1.08, r'\textbf{Task 1 \textit{DotAvg} Over Duration of Trajectory}',
+			 horizontalalignment='center',
+			 fontsize=35,
+			 transform = ax.transAxes)
 
-	leg = ax.legend() #ax.legend((allT1, oneT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
+		# plot the average dot product over time
+		allT1 = ax.plot(times, avgALLT1, '-', color=greyC, label=r'\textbf{All-at-Once}', lw=7)
+		oneT1 = ax.plot(times, avgONET1, '-', color=orangeC, label=r'\textbf{One-at-a-Time}', lw=7)
+
+		ax.fill_between(times, avgALLT1-allT1error, avgALLT1+allT1error, color=greyC, alpha=0.5, lw=0)
+		ax.fill_between(times, avgONET1-oneT1error, avgONET1+oneT1error, color=orangeC, alpha=0.5, lw=0)
+
+	else:
+		plt.text(0.5, 1.08, r'\textbf{Task 2 \textit{DotAvg} Over Duration of Trajectory}',
+			 horizontalalignment='center',
+			 fontsize=35,
+			 transform = ax.transAxes)
+
+		# plot the average dot product over time
+		allT1 = ax.plot(times, avgALLT2, '-', color=greyC, label=r'\textbf{All-at-Once}', lw=7)
+		oneT1 = ax.plot(times, avgONET2, '-', color=orangeC, label=r'\textbf{One-at-a-Time}', lw=7)
+
+	
+		ax.fill_between(times, avgALLT2-allT2error, avgALLT2+allT2error, color=greyC, alpha=0.5, lw=0)
+		ax.fill_between(times, avgONET2-oneT2error, avgONET2+oneT2error, color=orangeC, alpha=0.5, lw=0)
+
+	leg = ax.legend(fontsize=30, frameon=False) #ax.legend((allT1, oneT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
 
 	plt.show()
 
@@ -497,8 +544,242 @@ def plot_dotOverTime(saveFig=False):
 		here = os.path.dirname(os.path.realpath(__file__))
 		subdir = "/data/experimental/"
 		datapath = here + subdir
-		fig.savefig(datapath+"dotAvgTime.pdf", bbox_inches="tight")
+		if T1:
+			fig.savefig(datapath+"dotAvgTimeT1.pdf", bbox_inches="tight")
+		else:
+			fig.savefig(datapath+"dotAvgTimeT2.pdf", bbox_inches="tight")
 		print "Saved dotAvgTime figure."
+
+def plot_undoingObjSubj(saveFig=False):
+	"""
+	Plots side-by-side figure of cup/table away metric with undoing subj metric 
+	"""
+	# ------ COMPUTE OBJ METRICS NOW ----- #
+
+	filename = "metrics_obj.p"
+	obj = get_pickled_metrics(filename)
+
+	# for keeping average of each feature, for each method, and for each task
+	cupAwayAvg = np.array([[0.0, 0.0],[0.0,0.0]]) # [method all --> [avg for task 1, task 2], method one --> [avg for task 1, task 2]]
+	tableAwayAvg = np.array([[0.0, 0.0],[0.0,0.0]]) 
+
+	# for computing stddev 
+	pplCupALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL) # trial 1 --> [task 1, task 2], trial 2 --> [task 1, task 2]
+	pplCupONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+	pplTableALL = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+	pplTableONE = np.array([[[0.0,0.0],[0.0,0.0]],[[0.0,0.0],[0.0,0.0]]]*NUM_PPL)
+
+	stdCup = np.array([[0.0,0.0]]*2)
+	stdTable = np.array([[0.0,0.0]]*2)
+
+	for ID in obj.keys():
+		for task in obj[ID]:
+			for trial in [1,2]:
+				cup_all = obj[ID][task][trial]["A"][15]
+				cup_one = obj[ID][task][trial]["B"][15]
+				table_all = obj[ID][task][trial]["A"][16]
+				table_one = obj[ID][task][trial]["B"][16]
+
+				cupAwayAvg[0][task-1] += cup_all
+				cupAwayAvg[1][task-1] += cup_one
+
+				tableAwayAvg[0][task-1] += table_all
+				tableAwayAvg[1][task-1] += table_one
+
+				pplCupALL[ID][trial-1][task-1] = cup_all
+				pplCupONE[ID][trial-1][task-1] = cup_one
+				pplTableALL[ID][trial-1][task-1] = table_all
+				pplTableONE[ID][trial-1][task-1] = table_one
+
+	# average by number of participants
+	for method in range(2):
+		for task in range(2):
+			cupAwayAvg[method][task] /= NUM_PPL*2 # because 2 trials
+			tableAwayAvg[method][task] /= NUM_PPL*2
+			
+			if method == 0: # all method
+				stdCup[method][task] = np.std(pplCupALL[:,:,task])/np.sqrt(NUM_PPL*2*2) # because 2 tasks, 2 trials (per method)
+				stdTable[method][task] = np.std(pplTableALL[:,:,task])/np.sqrt(NUM_PPL*2*2)
+			else: # one method
+				stdCup[method][task] = np.std(pplCupONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+				stdTable[method][task] = np.std(pplTableONE[:,:,task])/np.sqrt(NUM_PPL*2*2)
+
+	# -------------------------------- #
+
+	# ------ COMPUTE SUBJ METRICS NOW ----- #
+	filename = "metrics_subj.p"
+	subj = get_pickled_metrics(filename)
+
+	t1All = [0.0]*NUM_PPL 
+	t2All = [0.0]*NUM_PPL
+	t1One = [0.0]*NUM_PPL
+	t2One = [0.0]*NUM_PPL
+
+	undoingT1avg = [0.0, 0.0] # [all, one method]
+	undoingT2avg = [0.0, 0.0] # [all, one method]
+
+	undoingT1err = [0.0, 0.0] # [all, one method]
+	undoingT2err = [0.0, 0.0] # [all, one method]
+
+	idxoffset = 2
+	for ID in range(NUM_PPL):
+		for task in [1, 2]:
+			Q6All = float(subj[ID][task]["A"][idxoffset+5])
+			Q7All = float(subj[ID][task]["A"][idxoffset+6])
+			Q8All = float(subj[ID][task]["A"][idxoffset+7])
+			avgAll = (Q6All+Q7All+Q8All)/3.0
+
+			Q6One = float(subj[ID][task]["B"][idxoffset+5])
+			Q7One = float(subj[ID][task]["B"][idxoffset+6])
+			Q8One = float(subj[ID][task]["B"][idxoffset+7])
+			avgOne = (Q6One+Q7One+Q8One)/3.0
+
+			if task == 1:
+				t1All[ID] = avgAll
+				t1One[ID] = avgOne
+				undoingT1avg[0] += avgAll
+				undoingT1avg[1] += avgOne
+			else:
+				t2All[ID] = avgAll
+				t2One[ID] = avgOne
+				undoingT2avg[0] += avgAll
+				undoingT2avg[1] += avgOne
+
+	#average by num ppl		
+	undoingT1avg[0] /= NUM_PPL
+	undoingT1avg[1] /= NUM_PPL
+	undoingT2avg[0] /= NUM_PPL
+	undoingT2avg[1] /= NUM_PPL
+			
+	undoingT1err[0] = np.std(t1All)/np.sqrt(NUM_PPL) 	
+	undoingT1err[1] = np.std(t1One)/np.sqrt(NUM_PPL) 	
+	undoingT2err[0] = np.std(t2All)/np.sqrt(NUM_PPL) 	
+	undoingT2err[1] = np.std(t2One)/np.sqrt(NUM_PPL) 	
+
+	# -------------------------------- #
+
+	# ------- PLOTTING ---------#
+
+	ind = np.arange(2)  # the x locations for the groups
+	width = 0.45       # the width of the bars
+	offset = 0.15
+
+	# colors
+	blackC = "black"	#(214/255., 39/255., 40/255.)
+	greyC = "grey"		#(44/255., 160/255., 44/255.)
+	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
+	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
+
+	# fonts
+	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+	rc('text', usetex=True)
+
+	fig, ((t1away, t1subj), (t2away, t2subj)) = plt.subplots(2, 2)
+
+	avgAllT1 = [cupAwayAvg[0][0],tableAwayAvg[0][0]]
+	avgOneT1 = [cupAwayAvg[1][0],tableAwayAvg[1][0]]
+	stdT1 = [[stdCup[0][0], stdTable[0][0]], [stdCup[1][0], stdTable[1][0]]]# all-->[stdCup, stdTable], one-->[stdCup, stdTable]
+	stdT2 = [[stdCup[0][1], stdTable[0][1]], [stdCup[1][1], stdTable[1][1]]]
+
+	avgAllT2 = [cupAwayAvg[0][1],tableAwayAvg[0][1]]
+	avgOneT2 = [cupAwayAvg[1][1],tableAwayAvg[1][1]]
+
+	# plot the OBJECTIVE METRICS
+	t1away.set_ylim([0,15])
+	t2away.set_ylim([0,15])
+	rectsALLT1 = t1away.bar(ind+offset, avgAllT1, width, color=greyC, yerr=stdT1[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsONET1 = t1away.bar(ind+width+offset, avgOneT1, width, color=orangeC, yerr=stdT1[1], ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsALLT2 = t2away.bar(ind+offset, avgAllT2, width, color=greyC, yerr=stdT2[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsONET2 = t2away.bar(ind+width+offset, avgOneT2, width, color=orangeC, yerr=stdT2[1], ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+
+	# plot the SUBJECTIVE METRICS
+	t1subj.set_ylim([0,7])
+	t2subj.set_ylim([0,7])
+	offset = 0.5
+	rectsSubjT1 = t1subj.bar(ind+offset, undoingT1avg, width, color=[greyC,orangeC], yerr=undoingT1err, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsSubjT2 = t2subj.bar(ind+offset, undoingT2avg, width, color=[greyC,orangeC], yerr=undoingT2err, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+
+	t1away.set_title(r'\textbf{\textit{CupAway} and \textit{TableAway} Objective Metrics}', fontsize=25, y=1.08)
+	#t2away.set_title(r'Task 2 \textit{CupAway} and \textit{TableAway} Metrics')
+	t1subj.set_title(r'\textbf{\textit{Undoing} Subjective Metrics}', fontsize=25, y=1.08)
+	#t2subj.set_title(r'Task 2 \textit{Undoing} Subjective Metrics')
+
+	# add some text for labels, title and axes ticks
+	t1away.set_ylabel(r'\textbf{Away Measure}',fontsize=20,labelpad=15)
+	t1away.set_xlabel(r'\textbf{Task 1: Correct Table}',fontsize=20,labelpad=15)
+
+	t2away.set_ylabel(r'\textbf{Away Measure}',fontsize=20,labelpad=15)
+	t2away.set_xlabel(r'\textbf{Task 2: Correct Cup + Table}',fontsize=20,labelpad=15)
+	
+	t1subj.set_ylabel(r'\textbf{Avg Likert Score}',fontsize=20,labelpad=15)
+	t1subj.set_xlabel(r'\textbf{Task 1: Correct Table}',fontsize=20,labelpad=15)
+
+	t2subj.set_ylabel(r'\textbf{Avg Likert Score}',fontsize=20,labelpad=15)
+	t2subj.set_xlabel(r'\textbf{Task 2: Correct Cup + Table}',fontsize=20,labelpad=15)
+	
+	# set x-axis  tick marks
+	t1away.set_xticks(ind+width+offset/3)
+	t2away.set_xticks(ind+width+offset/3)
+	t1subj.set_xticks(ind+width+offset/3)
+	t2subj.set_xticks(ind+width+offset/3)
+
+	xlabels = [r'\textit{CupAway}',r'\textit{TableAway}'] 
+	t1away.set_xticklabels(xlabels,10,fontsize=30)
+	t2away.set_xticklabels(xlabels,10,fontsize=30)
+
+	t1subj.set_xticklabels(["",""],10,fontsize=30)
+	t2subj.set_xticklabels(["",""],10,fontsize=30)
+
+	# remove the plot frame lines
+	t1away.spines["top"].set_visible(False)   
+	t1away.spines["right"].set_visible(False)    
+	t2away.spines["top"].set_visible(False)    
+	t2away.spines["right"].set_visible(False)    
+
+	t1subj.spines["top"].set_visible(False)   
+	t1subj.spines["right"].set_visible(False)    
+	t2subj.spines["top"].set_visible(False)    
+	t2subj.spines["right"].set_visible(False)      
+	
+	t1away.tick_params(labelsize=30)
+	t2away.tick_params(labelsize=30)
+	t1subj.tick_params(labelsize=30)
+	t2subj.tick_params(labelsize=30)
+
+	# set padding for x and y tick labels
+	t1away.tick_params(direction='out', pad=2)
+	t2away.tick_params(direction='out', pad=2)
+	t1subj.tick_params(direction='out', pad=2)
+	t2subj.tick_params(direction='out', pad=2)
+
+	# ensure that the axis ticks only show up on left of the plot.  
+	t1away.xaxis.set_ticks_position('none') 
+	t1away.yaxis.set_ticks_position('none') 		
+	t2away.xaxis.set_ticks_position('none') 
+	t2away.yaxis.set_ticks_position('none') 
+
+	t1subj.xaxis.set_ticks_position('none') 
+	t1subj.yaxis.set_ticks_position('none') 		
+	t2subj.xaxis.set_ticks_position('none') 
+	t2subj.yaxis.set_ticks_position('none') 		
+
+	plt.subplots_adjust(left=None, bottom=0.2, right=None, top=None, wspace=None, hspace=0.5)
+
+	leg = t1away.legend((rectsALLT1, rectsONET1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=20, frameon=False)
+	leg = t1subj.legend((rectsSubjT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=20, frameon=False)
+
+	# --------------------------#
+	
+	plt.show()
+
+	if saveFig:
+		here = os.path.dirname(os.path.realpath(__file__))
+		subdir = "/data/experimental/"
+		datapath = here + subdir
+		fig.savefig(datapath+"awayUndoing.pdf", bbox_inches="tight")
+		print "Saved awayUndoing figure."
 
 #--------- OprenRAVE plotting --------#
 
@@ -555,5 +836,7 @@ if __name__ == '__main__':
 	#task = 1
 	#plot_taskOpenrave(task)
 
+	# --- for plotting objective metrics --- #
 	#plot_cupTableDiffFinal(True)
-	plot_dotOverTime(True)
+	#plot_dotOverTime(T1=False, saveFig=True)
+	plot_undoingObjSubj(saveFig=True)

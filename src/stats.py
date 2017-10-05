@@ -51,7 +51,7 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 	Give the filename you want to save it as
 	If you want to pickle or not
 	"""
-	obj_metrics = compute_obj_metrics()
+	#obj_metrics = compute_obj_metrics()
 	subj_metrics = compute_subj_metrics()
 	
 	# write to file
@@ -60,15 +60,15 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 
 
 	if pickleData:
-		filepath_obj = here + subdir + filename + "_obj.p"
-		pickle.dump(obj_metrics, open( filepath_obj, "wb" ) )
+	#	filepath_obj = here + subdir + filename + "_obj.p"
+	#	pickle.dump(obj_metrics, open( filepath_obj, "wb" ) )
 		filepath_subj = here + subdir + filename + "_subj.p"
 		pickle.dump(subj_metrics, open( filepath_subj, "wb" ) )
 
 	if csvData:
-		filepath_obj = here + subdir + filename + "_obj.csv"
+	#	filepath_obj = here + subdir + filename + "_obj.csv"
 		filepath_subj = here + subdir + filename + "_subj.csv"
-
+		"""
 		# write objective metrics
 		with open(filepath_obj, 'w') as out_obj:
 			header = "participant,task,attempt,method,"
@@ -88,7 +88,7 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 								out_obj.write(","+str(num))
 							out_obj.write('\n')
 		out_obj.close()
-
+		"""
 		# write subjective metrics
 		with open(filepath_subj, 'w') as out_subj:
 			header = "participant,task,method,age,gender,Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9,Q10\n"
@@ -100,7 +100,7 @@ def	save_parsed_data(filename, csvData=True, pickleData=False):
 						out_subj.write(row)
 						for num in subj_metrics[ID][task][method]:
 							out_subj.write(","+str(num))
-						out_subj.write('\n')
+			out_subj.write('\n')
 		out_subj.close()
 	
 
@@ -265,12 +265,13 @@ def compute_subj_metrics():
 				method = "A"
 			age = int(values[4])
 			gender = values[5]
+			techbg = values[6]
 			# store age
 			subj_metrics[ID][task][method][0] = age
 			subj_metrics[ID][task][method][1] = gender
 			# parse likert data
 			for i in range(10):
-				subj_metrics[ID][task][method][i+2] = values[i+6]
+				subj_metrics[ID][task][method][i+2] = values[i+7]
 			
 	return subj_metrics
 
