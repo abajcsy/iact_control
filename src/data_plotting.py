@@ -4,6 +4,7 @@ from numpy import linspace
 from matplotlib import rc
 import matplotlib.pyplot as plt
 import matplotlib.lines as lines
+from matplotlib import gridspec
 import math
 import logging
 import copy
@@ -484,23 +485,24 @@ def plot_dotOverTime(T1=True,saveFig=False):
 	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 	rc('text', usetex=True)
 	
-	fig, ax = plt.subplots()
+	fig, ax = plt.subplots(figsize=(11,9))
 
 	#ax.set_xticks(ind+width+offset)
 
 	#xlabels = "Time (s)" #["T"+str(t+1) for t in range(3)]
 	#ax.set_xticklabels(xlabels,10,fontsize=50)
 
-	plt.ylabel('DotAvg',fontsize=50)
-	plt.xlabel('Time (s)',fontsize=50)
+	plt.ylabel(r'\textbf{\textit{DotAvg}}',fontsize=35)
+	plt.xlabel(r'\textbf{Time (s)}',fontsize=35)
 
 	# remove the plot frame lines
 	ax.spines["top"].set_visible(False)    
 	ax.spines["right"].set_visible(False)      
 	
-	ax.tick_params(labelsize=50)
+	ax.tick_params(labelsize=30)
 	# set padding for x and y tick labels
-	ax.tick_params(direction='out', pad=2)
+	ax.tick_params(axis='both', which='major', pad=15)
+	#ax.tick_params(direction='out', pad=2)
 
 	# ensure that the axis ticks only show up on left of the plot.  
 	ax.xaxis.set_ticks_position('none') 
@@ -510,9 +512,9 @@ def plot_dotOverTime(T1=True,saveFig=False):
 	ax.set_xlim([0.0,19])
 
 	if T1:
-		plt.text(0.5, 1.08, r'\textbf{Task 1 \textit{DotAvg} Over Duration of Trajectory}',
+		plt.text(0.5, 1.08, r'\textbf{\textit{DotAvg} During Task 1: Table}',
 			 horizontalalignment='center',
-			 fontsize=35,
+			 fontsize=40,
 			 transform = ax.transAxes)
 
 		# plot the average dot product over time
@@ -523,9 +525,9 @@ def plot_dotOverTime(T1=True,saveFig=False):
 		ax.fill_between(times, avgONET1-oneT1error, avgONET1+oneT1error, color=orangeC, alpha=0.5, lw=0)
 
 	else:
-		plt.text(0.5, 1.08, r'\textbf{Task 2 \textit{DotAvg} Over Duration of Trajectory}',
+		plt.text(0.5, 1.08, r'\textbf{\textit{DotAvg} During Task 2: Table + Cup}',
 			 horizontalalignment='center',
-			 fontsize=35,
+			 fontsize=40,
 			 transform = ax.transAxes)
 
 		# plot the average dot product over time
@@ -536,7 +538,7 @@ def plot_dotOverTime(T1=True,saveFig=False):
 		ax.fill_between(times, avgALLT2-allT2error, avgALLT2+allT2error, color=greyC, alpha=0.5, lw=0)
 		ax.fill_between(times, avgONET2-oneT2error, avgONET2+oneT2error, color=orangeC, alpha=0.5, lw=0)
 
-	leg = ax.legend(fontsize=30, frameon=False) #ax.legend((allT1, oneT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
+	leg = ax.legend(fontsize=30, frameon=False, loc="upper left") #ax.legend((allT1, oneT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=40)
 
 	plt.show()
 
@@ -674,7 +676,14 @@ def plot_undoingObjSubj(saveFig=False):
 	rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 	rc('text', usetex=True)
 
-	fig, ((t1away, t1subj), (t2away, t2subj)) = plt.subplots(2, 2)
+	fig = plt.figure()
+	#fig, ((t1away, t1subj), (t2away, t2subj)) = plt.subplots(2, 2)
+
+	gs = gridspec.GridSpec(4, 2, width_ratios=[3, 1]) 
+	t1away = plt.subplot(gs[0])
+	t1subj = plt.subplot(gs[1])
+	t2away = plt.subplot(gs[2])
+	t2subj = plt.subplot(gs[3])
 
 	avgAllT1 = [cupAwayAvg[0][0],tableAwayAvg[0][0]]
 	avgOneT1 = [cupAwayAvg[1][0],tableAwayAvg[1][0]]
@@ -685,8 +694,11 @@ def plot_undoingObjSubj(saveFig=False):
 	avgOneT2 = [cupAwayAvg[1][1],tableAwayAvg[1][1]]
 
 	# plot the OBJECTIVE METRICS
-	t1away.set_ylim([0,15])
-	t2away.set_ylim([0,15])
+	ticks = np.arange(0,12,2)
+	t1away.set_ylim([0,12])
+	t2away.set_ylim([0,12])
+	#t1away.yaxis.set_ticks(ticks)#ylim([0,15])
+	#t2away.yaxis.set_ticks(ticks)#ylim([0,15])
 	rectsALLT1 = t1away.bar(ind+offset, avgAllT1, width, color=greyC, yerr=stdT1[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsONET1 = t1away.bar(ind+width+offset, avgOneT1, width, color=orangeC, yerr=stdT1[1], ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	rectsALLT2 = t2away.bar(ind+offset, avgAllT2, width, color=greyC, yerr=stdT2[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
@@ -696,40 +708,63 @@ def plot_undoingObjSubj(saveFig=False):
 	t1subj.set_ylim([0,7])
 	t2subj.set_ylim([0,7])
 	offset = 0.5
-	rectsSubjT1 = t1subj.bar(ind+offset, undoingT1avg, width, color=[greyC,orangeC], yerr=undoingT1err, ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
-	rectsSubjT2 = t2subj.bar(ind+offset, undoingT2avg, width, color=[greyC,orangeC], yerr=undoingT2err, ecolor='k',linewidth=0.5, edgecolor='#272727',error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	width = 0.8
+	# task 1 subj
+	rectsSubjT1ALL = t1subj.bar(offset, undoingT1avg[0], width, color=greyC, yerr=undoingT1err[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsSubjT1ONE = t1subj.bar(offset+width, undoingT1avg[1], width, color=orangeC, yerr=undoingT1err[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+	# task 2 subj
+	rectsSubjT2ALL = t2subj.bar(offset, undoingT2avg[0], width, color=greyC, yerr=undoingT2err[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+	rectsSubjT2ONE = t2subj.bar(offset+width, undoingT2avg[1], width, color=orangeC, yerr=undoingT2err[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
+
+	pos1 = t1away.get_position() # get the original position 
+	pos2 = [pos1.x0, pos1.y0,  pos1.width , pos1.height*1.5] 
+	t1away.set_position(pos2)
+
+	pos1 = t2away.get_position() # get the original position 
+	pos2 = [pos1.x0, pos1.y0 - 0.2,  pos1.width , pos1.height*1.5] 
+	t2away.set_position(pos2)
+
+	pos1 = t1subj.get_position() # get the original position 
+	pos2 = [pos1.x0, pos1.y0,  pos1.width , pos1.height*1.5] 
+	t1subj.set_position(pos2)
+
+	pos1 = t2subj.get_position() # get the original position 
+	pos2 = [pos1.x0, pos1.y0 - 0.2,  pos1.width , pos1.height*1.5] 
+	t2subj.set_position(pos2)
 
 
-	t1away.set_title(r'\textbf{\textit{CupAway} and \textit{TableAway} Objective Metrics}', fontsize=25, y=1.08)
+	t1away.set_title(r'\textbf{\textit{CupAway} and \textit{TableAway} Metrics}', fontsize=43, y=1.48)
 	#t2away.set_title(r'Task 2 \textit{CupAway} and \textit{TableAway} Metrics')
-	t1subj.set_title(r'\textbf{\textit{Undoing} Subjective Metrics}', fontsize=25, y=1.08)
+	t1subj.set_title(r'\textbf{Required \textit{Undoing}}', fontsize=42, y=1.48)
 	#t2subj.set_title(r'Task 2 \textit{Undoing} Subjective Metrics')
 
 	# add some text for labels, title and axes ticks
-	t1away.set_ylabel(r'\textbf{Away Measure}',fontsize=20,labelpad=15)
-	t1away.set_xlabel(r'\textbf{Task 1: Correct Table}',fontsize=20,labelpad=15)
+	sz = 38
+	t1away.set_ylabel(r'\textbf{Away Measure}',fontsize=sz,labelpad=15)
+	t1away.set_xlabel(r'\textbf{Task 1: Table}',fontsize=sz,labelpad=15)
 
-	t2away.set_ylabel(r'\textbf{Away Measure}',fontsize=20,labelpad=15)
-	t2away.set_xlabel(r'\textbf{Task 2: Correct Cup + Table}',fontsize=20,labelpad=15)
+	t2away.set_ylabel(r'\textbf{Away Measure}',fontsize=sz,labelpad=15)
+	t2away.set_xlabel(r'\textbf{Task 2: Table + Cup }',fontsize=sz,labelpad=15)
 	
-	t1subj.set_ylabel(r'\textbf{Avg Likert Score}',fontsize=20,labelpad=15)
-	t1subj.set_xlabel(r'\textbf{Task 1: Correct Table}',fontsize=20,labelpad=15)
+	t1subj.set_ylabel(r'\textbf{Likert Score}',fontsize=sz,labelpad=15)
+	t1subj.set_xlabel(r'\textbf{Task 1: Table}',fontsize=sz,labelpad=15)
 
-	t2subj.set_ylabel(r'\textbf{Avg Likert Score}',fontsize=20,labelpad=15)
-	t2subj.set_xlabel(r'\textbf{Task 2: Correct Cup + Table}',fontsize=20,labelpad=15)
+	t2subj.set_ylabel(r'\textbf{Likert Score}',fontsize=sz,labelpad=15)
+	t2subj.set_xlabel(r'\textbf{Task 2: Table + Cup}',fontsize=sz,labelpad=15)
 	
 	# set x-axis  tick marks
-	t1away.set_xticks(ind+width+offset/3)
-	t2away.set_xticks(ind+width+offset/3)
-	t1subj.set_xticks(ind+width+offset/3)
-	t2subj.set_xticks(ind+width+offset/3)
+	t1away.set_xticks(ind+width/2+offset/2)
+	t2away.set_xticks(ind+width/2+offset/2)
+	t1subj.set_xticks(ind+width+offset)
+	t2subj.set_xticks(ind+width+offset)
 
 	xlabels = [r'\textit{CupAway}',r'\textit{TableAway}'] 
-	t1away.set_xticklabels(xlabels,10,fontsize=30)
-	t2away.set_xticklabels(xlabels,10,fontsize=30)
+	t1away.set_xticklabels(xlabels,10,fontsize=sz)
+	t2away.set_xticklabels(xlabels,10,fontsize=sz)
 
-	t1subj.set_xticklabels(["",""],10,fontsize=30)
-	t2subj.set_xticklabels(["",""],10,fontsize=30)
+	t1subj.set_xticklabels(["",""],10,fontsize=sz)
+	t2subj.set_xticklabels(["",""],10,fontsize=sz)
 
 	# remove the plot frame lines
 	t1away.spines["top"].set_visible(False)   
@@ -742,16 +777,11 @@ def plot_undoingObjSubj(saveFig=False):
 	t2subj.spines["top"].set_visible(False)    
 	t2subj.spines["right"].set_visible(False)      
 	
-	t1away.tick_params(labelsize=30)
-	t2away.tick_params(labelsize=30)
-	t1subj.tick_params(labelsize=30)
-	t2subj.tick_params(labelsize=30)
-
 	# set padding for x and y tick labels
-	t1away.tick_params(direction='out', pad=2)
-	t2away.tick_params(direction='out', pad=2)
-	t1subj.tick_params(direction='out', pad=2)
-	t2subj.tick_params(direction='out', pad=2)
+	t1away.tick_params(axis='both', which='major', pad=15, labelsize=30)
+	t2away.tick_params(axis='both', which='major', pad=15, labelsize=30)
+	t1subj.tick_params(axis='both', which='major', pad=15, labelsize=30)
+	t2subj.tick_params(axis='both', which='major', pad=25, labelsize=30)
 
 	# ensure that the axis ticks only show up on left of the plot.  
 	t1away.xaxis.set_ticks_position('none') 
@@ -764,10 +794,16 @@ def plot_undoingObjSubj(saveFig=False):
 	t2subj.xaxis.set_ticks_position('none') 
 	t2subj.yaxis.set_ticks_position('none') 		
 
-	plt.subplots_adjust(left=None, bottom=0.2, right=None, top=None, wspace=None, hspace=0.5)
+	#plt.subplots_adjust(hspace = 1)
+	#plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
 
-	leg = t1away.legend((rectsALLT1, rectsONET1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=20, frameon=False)
-	leg = t1subj.legend((rectsSubjT1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=20, frameon=False)
+	leg1 = t1away.legend((rectsALLT1, rectsONET1), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), ncol=2, fontsize=sz, loc='upper center',bbox_to_anchor=(0.5, 1.5))
+	#leg2 = t1subj.legend((rectsSubjT1ALL, rectsSubjT1ONE), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), ncol=2, fontsize=25, loc='upper center',bbox_to_anchor=(0.5, 1.3))
+
+	leg1.get_frame().set_linewidth(0.0)
+	leg1.get_frame().set_alpha(0)
+	#leg2.get_frame().set_linewidth(0.0)
+	#leg2.get_frame().set_alpha(0)
 
 	# --------------------------#
 	
@@ -795,7 +831,7 @@ def plot_dotF_cupDiff_tableDiff(saveFig=False):
 
 	ind = np.arange(2)  # the x locations for the groups
 	ind[1] = 2
-	width = 0.45       # the width of the bars
+	width = 0.8       # the width of the bars
 	offset = 0.2
 
 	# colors
@@ -804,7 +840,7 @@ def plot_dotF_cupDiff_tableDiff(saveFig=False):
 	blueC = "#4BABC5" 	#(31/255., 119/255., 180/255.)
 	orangeC = "#F79545" #(255/255., 127/255., 14/255.)
 
-	fig, (dotF, cupDiffF, tableDiffF) = plt.subplots(1, 3, figsize=(25,15))
+	fig, (dotF, cupDiffF, tableDiffF) = plt.subplots(1, 3, figsize=(26,15))
 
 	# plot cupDiffFinal bar chart
 	cupDiffFALL = cupDiffF.bar(ind+offset, cupAvg[0], width, color=greyC, yerr=stdCup[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
@@ -816,15 +852,18 @@ def plot_dotF_cupDiff_tableDiff(saveFig=False):
 	dotFALL = dotF.bar(ind+offset, dotFAvg[0], width, color=greyC, yerr=stdDotF[0], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 	dotFONE = dotF.bar(ind+width+offset, dotFAvg[1], width, color=orangeC, yerr=stdDotF[1], ecolor='k', edgecolor='#272727',linewidth=0.5,error_kw=dict(ecolor='black', lw=2, capsize=0, capthick=0))
 
+	plt.subplots_adjust(left=0.12, bottom=None, right=1.2, top=None, wspace=0.3, hspace=None)
+
 	format_subplot(cupDiffF, cupDiffFALL, cupDiffFONE, xlabel="Tasks", ylabel="CupDiffFinal", title="", indX=ind)
 	format_subplot(tableDiffF, tableDiffFALL, tableDiffFONE, xlabel="Tasks", ylabel="TableDiffFinal", title="", indX=ind)
 	format_subplot(dotF, dotFALL, dotFONE, xlabel="Tasks", ylabel="DotFinal", title="", indX=ind)
 
-	leg = fig.legend((cupDiffFALL[0], cupDiffFONE[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), ncol=2, fontsize=30, loc='upper center',bbox_to_anchor=(0.65, 1.08))
+
+	leg = fig.legend((cupDiffFALL[0], cupDiffFONE[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), ncol=2, fontsize=40, loc='upper center',bbox_to_anchor=(0.6, 0.68))
 	leg.get_frame().set_linewidth(0.0)
 	leg.get_frame().set_alpha(0)
 
-
+	"""
 	pval1 = [0.01,0.01]
 	pval2 = [0.001,0.001]
 	autolabel_star(cupDiffF, cupDiffFALL, stdCup[0], pval1)
@@ -833,9 +872,9 @@ def plot_dotF_cupDiff_tableDiff(saveFig=False):
 	autolabel_star(tableDiffF, tableDiffFONE, stdTable[1],pval2, twostar=True, second=True)
 	autolabel_star(dotF, dotFALL, stdDotF[0], pval2, twostar=True)
 	autolabel_star(dotF, dotFONE, stdDotF[1], pval2, twostar=True, second=True)
+	"""
 
-	plt.title(r'\textbf{Final Learned Reward Metrics}', fontsize=50, x=-0.7, y=1.2)
-	plt.subplots_adjust(left=0.12, bottom=None, right=1.2, top=None, wspace=0.2, hspace=None)
+	plt.title(r'\textbf{Final Learned Reward Metrics}', fontsize=50, x=-0.86, y=1.35)
 
 	plt.show()
 
@@ -897,18 +936,18 @@ def format_subplot(ax, rectsA, rectsB, xlabel, ylabel, title, indX=[0,0]):
 	rc('text', usetex=True)
 
 	# add some text for labels, title and axes ticks
-	ax.set_ylabel(r'\textit{\textbf{'+ylabel+'}}',fontsize=30,labelpad=15)
-	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=30,labelpad=15)
+	ax.set_ylabel(r'\textit{\textbf{'+ylabel+'}}',fontsize=40,labelpad=15)
+	ax.set_xlabel(r'\textbf{'+xlabel+'}',fontsize=40,labelpad=15)
 	
 	plt.text(0.5, 1.08, r'\textbf{'+title+'}',
 			 horizontalalignment='center',
-			 fontsize=30,
+			 fontsize=50,
 			 transform = ax.transAxes)
 	
 	ax.set_xticks(indX+width+offset)
 
 	xlabels = ["Table","Table + Cup"] #["T"+str(t+1) for t in range(3)]
-	ax.set_xticklabels(xlabels,10,fontsize=22)
+	ax.set_xticklabels(xlabels,10,fontsize=40)
 
 	# remove the plot frame lines
 	ax.spines["top"].set_visible(False)    
@@ -916,10 +955,11 @@ def format_subplot(ax, rectsA, rectsB, xlabel, ylabel, title, indX=[0,0]):
 	
 	# set max y-limit 
 	#ax.set_ylim([0,maxY])
-	ax.tick_params(labelsize=30)
+#	ax.tick_params(labelsize=40)
+	ax.tick_params(axis='both', which='major', pad=15, labelsize=40)
 
 	# set padding for x and y tick labels
-	ax.tick_params(direction='out', pad=2)
+	#ax.tick_params(direction='out', pad=2)
 
 	# ensure that the axis ticks only show up on left of the plot.  
 	ax.xaxis.set_ticks_position('none') 
@@ -928,6 +968,12 @@ def format_subplot(ax, rectsA, rectsB, xlabel, ylabel, title, indX=[0,0]):
 	#leg = ax.legend((rectsA[0], rectsB[0]), (r'\textbf{All-at-Once}', r'\textbf{One-at-a-Time}'), fontsize=30)
 	#leg.get_frame().set_linewidth(0.0)
 	#leg.get_frame().set_alpha(0)
+
+	pos1 = ax.get_position() # get the original position 
+	pos2 = [pos1.x0, pos1.y0,  pos1.width , pos1.height*0.5] 
+	ax.set_position(pos2)
+
+
 
 def getAvgs_Stds(idxCup, idxTable=None, oneMetric=False):
 	"""
@@ -1078,6 +1124,6 @@ if __name__ == '__main__':
 
 	# --- for plotting objective metrics --- #
 	#plot_cupTableDiffFinal(True)
-	#plot_dotOverTime(T1=False, saveFig=True)
-	#plot_undoingObjSubj(saveFig=True)
-	plot_dotF_cupDiff_tableDiff(True)
+	plot_dotOverTime(T1=True, saveFig=True) 		# DONE
+	#plot_undoingObjSubj(saveFig=True)				# DONE
+	#plot_dotF_cupDiff_tableDiff(True)				# DONE
