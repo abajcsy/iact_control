@@ -28,6 +28,12 @@ Command-line options include:
 * `demo`: Demonstrates the "optimal" way to perform the task {default = F, optimal demo = T}
 * `record`: Records the interaction forces, measured trajectories, and cost function weights for a task {record data = T, don't record = F}
 
+### Publications
+Code used in the following papers:
+* A. Bajcsy* , D.P. Losey*, M.K. O'Malley, and A.D. Dragan. [Learning Robot Objectives from Physical Human Robot Interaction.](http://proceedings.mlr.press/v78/bajcsy17a/bajcsy17a.pdf) Conference on Robot Learning (CoRL), 2017.
+* A. Bajcsy , D.P. Losey, M.K. O'Malley, and A.D. Dragan. [Learning from Physical Human Corrections, One Feature at a Time.](https://dl.acm.org/citation.cfm?id=3171267) International Confernece on Human-Robot Interaction (HRI), 2018.
+
+
 ### References
 * TrajOpt Planner: http://rll.berkeley.edu/trajopt/doc/sphinx_build/html/index.html
 * PID Control Reference: https://w3.cs.jmu.edu/spragunr/CS354/handouts/pid.pdf
